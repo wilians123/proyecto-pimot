@@ -1,14 +1,9 @@
 // =============================================================
-// Tipos TypeScript para los componentes de UI de PIMOT
+// Agrega tipos para flota, notificaciones y panel móvil
 // =============================================================
 
-// Estado de viaje — valores exactos que vienen de la BD
 export type EstadoViajeUI = 'programado' | 'en_transito' | 'en_destino' | 'finalizado' | 'cancelado'
-
-// Nivel de alerta — valores exactos de la BD
 export type NivelAlertaUI = 'info' | 'advertencia' | 'critico'
-
-// Módulos disponibles en el sidebar
 export type ModuloId =
   | 'dashboard'
   | 'viajes'
@@ -18,7 +13,31 @@ export type ModuloId =
   | 'pilotos'
   | 'usuarios'
 
-// ── Datos de muestra tipados ──────────────────────────────────
+// ── Tipos de flota ────────────────────────────────────────────
+export type TipoEquipo   = 'cabezal' | 'chasis'
+export type TamañoChasis = '20' | '40' | '45'
+export type EstadoCabezal = 'activo' | 'en_viaje' | 'en_mantenimiento' | 'inactivo'
+export type EstadoChasisUI = 'disponible' | 'en_renta' | 'en_flete' | 'en_taller'
+
+export interface CabezalUI {
+  id?: string
+  placa: string
+  marca?: string
+  modelo?: string
+  año?: number
+  estado: EstadoCabezal
+  notas?: string
+}
+
+export interface ChasisUI {
+  id?: string
+  placa: string
+  tamaño: TamañoChasis
+  estado: EstadoChasisUI
+  notas?: string
+}
+
+// ── Datos de pantallas ────────────────────────────────────────
 export interface ViajeResumen {
   id: string
   piloto: string
@@ -39,36 +58,25 @@ export interface AlertaResumen {
   tiempo: string
 }
 
-// ── Props de componentes UI ───────────────────────────────────
-export interface BadgeProps {
-  estado: EstadoViajeUI
-}
-
-export interface KpiCardProps {
-  titulo: string
-  valor: string | number
-  subtexto?: string
-  color?: string
-  tendencia?: number
-}
-
-export interface AlertaBadgeProps {
-  alerta: AlertaResumen
-}
+// ── Props de componentes ──────────────────────────────────────
+export interface BadgeProps            { estado: EstadoViajeUI }
+export interface KpiCardProps          { titulo: string; valor: string | number; subtexto?: string; color?: string; tendencia?: number; icon?: React.ReactNode }
+export interface AlertaBadgeProps      { alerta: AlertaResumen }
+export interface ModuloPlaceholderProps { titulo: string; descripcion: string }
 
 export interface SidebarProps {
   modulo: ModuloId
   setModulo: (id: ModuloId) => void
   collapsed: boolean
   toggle: () => void
+  mobileOpen: boolean
+  setMobileOpen: (v: boolean) => void
 }
 
 export interface HeaderProps {
   titulo: string
   alertasCount: number
-}
-
-export interface ModuloPlaceholderProps {
-  titulo: string
-  descripcion: string
+  onToggleMobile: () => void
+  onToggleNotifications: () => void
+  notificationsOpen: boolean
 }

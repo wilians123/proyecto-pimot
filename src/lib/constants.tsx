@@ -1,65 +1,107 @@
 // =============================================================
-// Constantes globales de UI: iconos, configs de estado, nav
+// configs de estado actualizadas, tipos de flota añadidos
 // =============================================================
 
-import type { EstadoViajeUI, NivelAlertaUI, ModuloId, ViajeResumen, AlertaResumen } from '@/types/ui'
+import type {
+  EstadoViajeUI, NivelAlertaUI, ModuloId,
+  ViajeResumen, AlertaResumen,
+  EstadoCabezal, EstadoChasisUI,
+} from '@/types/ui'
 
-// ─── Iconos inline (sin dependencia externa) ─────────────────
+
+// identificables para usuarios no técnicos
 export const icons = {
   dashboard: (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-      <path d="M2 4a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2H4a2 2 0 01-2-2V4zm0 9a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2H4a2 2 0 01-2-2v-3zm9-9a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2h-3a2 2 0 01-2-2V4zm0 9a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2h-3a2 2 0 01-2-2v-3z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
     </svg>
   ),
   truck: (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-      <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM2 2.5A.5.5 0 012.5 2H11a.5.5 0 01.5.5v9H2V2.5zM11.5 4H14l2 3v3.5h-4.5V4z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <path d="M1 3h13v13H1z" />
+      <path d="M14 8h4l3 3v5h-7V8z" />
+      <circle cx="5.5" cy="18.5" r="2.5" />
+      <circle cx="18.5" cy="18.5" r="2.5" />
     </svg>
   ),
   bell: (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-      <path d="M10 2a6 6 0 00-6 6v2.586l-.707.707A1 1 0 004 13h12a1 1 0 00.707-1.707L16 10.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   ),
   chart: (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-      <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4"  />
+      <line x1="6"  y1="20" x2="6"  y2="14" />
+      <line x1="2"  y1="20" x2="22" y2="20" />
     </svg>
   ),
   flota: (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-      <path
-        fillRule="evenodd"
-        d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z"
-        clipRule="evenodd"
-      />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <rect x="1" y="3" width="15" height="13" rx="1" />
+      <path d="M16 8h4l3 3v5h-7" />
+      <circle cx="5.5"  cy="18.5" r="2.5" />
+      <circle cx="18.5" cy="18.5" r="2.5" />
+      <path d="M10.5 18.5h5" />
     </svg>
   ),
   pilot: (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-      <path
-        fillRule="evenodd"
-        d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-        clipRule="evenodd"
-      />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   ),
   security: (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-      <path
-        fillRule="evenodd"
-        d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-        clipRule="evenodd"
-      />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <polyline points="9 12 11 14 15 10" />
     </svg>
   ),
+  // Iconos de layout y acciones
   menu: (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-      <path
-        fillRule="evenodd"
-        d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-        clipRule="evenodd"
-      />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <line x1="3" y1="6"  x2="21" y2="6"  />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  ),
+  chevronLeft: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  ),
+  chevronRight: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  ),
+  close: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  ),
+  plus: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  ),
+  check: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  ),
+  alertTriangle: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
     </svg>
   ),
 }
@@ -69,24 +111,46 @@ export const ESTADO_CONFIG: Record<
   EstadoViajeUI,
   { label: string; bg: string; text: string; dot: string }
 > = {
-  programado:  { label: 'Programado',  bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
-  en_transito: { label: 'En Tránsito', bg: 'bg-blue-50',   text: 'text-blue-700',  dot: 'bg-blue-500'  },
-  en_destino:  { label: 'En Destino',  bg: 'bg-amber-50',  text: 'text-amber-700', dot: 'bg-amber-500' },
-  finalizado:  { label: 'Finalizado',  bg: 'bg-green-50',  text: 'text-green-700', dot: 'bg-green-500' },
-  cancelado:   { label: 'Cancelado',   bg: 'bg-red-50',    text: 'text-red-600',   dot: 'bg-red-400'   },
+  programado:  { label: 'Programado',  bg: 'bg-slate-100', text: 'text-slate-700', dot: 'bg-slate-400' },
+  en_transito: { label: 'En Tránsito', bg: 'bg-blue-100',  text: 'text-blue-800',  dot: 'bg-blue-500'  },
+  en_destino:  { label: 'En Destino',  bg: 'bg-amber-100', text: 'text-amber-800', dot: 'bg-amber-500' },
+  finalizado:  { label: 'Finalizado',  bg: 'bg-green-100', text: 'text-green-800', dot: 'bg-green-600' },
+  cancelado:   { label: 'Cancelado',   bg: 'bg-red-100',   text: 'text-red-700',   dot: 'bg-red-400'   },
 }
 
 // ─── Configuración visual de niveles de alerta ────────────────
 export const ALERTA_CONFIG: Record<
   NivelAlertaUI,
-  { bg: string; text: string; border: string; icon: string }
+  { bg: string; text: string; border: string; icon: string; labelBg: string; labelText: string }
 > = {
-  info:        { bg: 'bg-blue-50',  text: 'text-blue-700',  border: 'border-blue-200',  icon: '●' },
-  advertencia: { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200', icon: '▲' },
-  critico:     { bg: 'bg-red-50',   text: 'text-red-700',   border: 'border-red-200',   icon: '■' },
+  info:        { bg: 'bg-blue-50',  text: 'text-blue-800',  border: 'border-blue-200',  icon: 'ℹ',  labelBg: 'bg-blue-100',  labelText: 'text-blue-800'  },
+  advertencia: { bg: 'bg-amber-50', text: 'text-amber-900', border: 'border-amber-300', icon: '⚠',  labelBg: 'bg-amber-100', labelText: 'text-amber-900' },
+  critico:     { bg: 'bg-red-50',   text: 'text-red-800',   border: 'border-red-300',   icon: '🚨', labelBg: 'bg-red-100',   labelText: 'text-red-800'   },
 }
 
-// ─── Ítems del menú de navegación ────────────────────────────
+// ─── Estados de cabezal ───────────────────────────────────────
+export const ESTADO_CABEZAL_CONFIG: Record<
+  EstadoCabezal,
+  { label: string; bg: string; text: string; dot: string }
+> = {
+  activo:           { label: 'Disponible',   bg: 'bg-green-100', text: 'text-green-800', dot: 'bg-green-500'  },
+  en_viaje:         { label: 'En Viaje',      bg: 'bg-blue-100',  text: 'text-blue-800',  dot: 'bg-blue-500'   },
+  en_mantenimiento: { label: 'Mantenimiento', bg: 'bg-amber-100', text: 'text-amber-800', dot: 'bg-amber-500'  },
+  inactivo:         { label: 'Inactivo',      bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400'  },
+}
+
+// ─── Estados de chasis ────────────────────────────────────────
+export const ESTADO_CHASIS_CONFIG: Record<
+  EstadoChasisUI,
+  { label: string; bg: string; text: string; dot: string }
+> = {
+  disponible: { label: 'Disponible', bg: 'bg-green-100', text: 'text-green-800', dot: 'bg-green-500'  },
+  en_renta:   { label: 'En Renta',   bg: 'bg-purple-100',text: 'text-purple-800',dot: 'bg-purple-500' },
+  en_flete:   { label: 'En Flete',   bg: 'bg-blue-100',  text: 'text-blue-800',  dot: 'bg-blue-500'   },
+  en_taller:  { label: 'En Taller',  bg: 'bg-amber-100', text: 'text-amber-800', dot: 'bg-amber-500'  },
+}
+
+// ─── Ítems de navegación ──────────────────────────────────────
 export const NAV_ITEMS: Array<{ id: ModuloId; label: string; icon: React.ReactNode }> = [
   { id: 'dashboard', label: 'Panel Principal',      icon: icons.dashboard },
   { id: 'viajes',    label: 'Viajes',               icon: icons.truck     },
@@ -97,7 +161,7 @@ export const NAV_ITEMS: Array<{ id: ModuloId; label: string; icon: React.ReactNo
   { id: 'usuarios',  label: 'Usuarios y Seguridad', icon: icons.security  },
 ]
 
-// ─── Títulos de módulos para el Header ───────────────────────
+// ─── Títulos de módulos ───────────────────────────────────────
 export const MODULO_HEADERS: Record<ModuloId, string> = {
   dashboard: 'Panel Principal',
   viajes:    'Seguimiento de Viajes',
@@ -108,7 +172,7 @@ export const MODULO_HEADERS: Record<ModuloId, string> = {
   usuarios:  'Usuarios y Seguridad',
 }
 
-// ─── Datos de muestra (se reemplazarán por datos reales de Supabase) ──
+// ─── Datos de muestra ─────────────────────────────────────────
 export const VIAJES_MUESTRA: ViajeResumen[] = [
   { id: 'VJ-2026-0042', piloto: 'Carlos Ramírez',  origen: 'Puerto Barrios',          destino: 'Ciudad de Guatemala', estado: 'en_transito', inicio: '08:30', estimado: '14:00', cabezal: 'P-123ABC' },
   { id: 'VJ-2026-0041', piloto: 'Miguel Torres',   origen: 'Santo Tomás de Castilla', destino: 'Escuintla',           estado: 'en_destino',  inicio: '06:15', estimado: '11:30', cabezal: 'P-456DEF' },
