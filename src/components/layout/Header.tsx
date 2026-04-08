@@ -1,5 +1,11 @@
 // =============================================================
-// Barra superior: título de módulo, alertas, estado de conexión
+// MODIFICACIÓN: src/components/layout/Header.tsx
+// Cambios:
+//   • Botón hamburger para móvil
+//   • Panel de notificaciones desplegable al hacer clic
+//   • Tipografía más grande y legible
+//   • cursor-pointer en todos los elementos interactivos
+//   • Cierre al hacer clic fuera del panel
 // =============================================================
 
 'use client'

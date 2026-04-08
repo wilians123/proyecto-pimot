@@ -1,15 +1,9 @@
-// =============================================================
-// configs de estado actualizadas, tipos de flota añadidos
-// =============================================================
-
 import type {
   EstadoViajeUI, NivelAlertaUI, ModuloId,
   ViajeResumen, AlertaResumen,
   EstadoCabezal, EstadoChasisUI,
 } from '@/types/ui'
 
-
-// identificables para usuarios no técnicos
 export const icons = {
   dashboard: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
