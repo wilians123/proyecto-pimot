@@ -152,6 +152,7 @@ export default function MapaFlota({
     initStartedRef.current = true;
 
     const container = mapContainerRef.current;
+    const markers = markersRef.current;
     const centro: [number, number] = [15.708, -88.598];
 
     import("leaflet").then((L) => {
@@ -212,14 +213,13 @@ export default function MapaFlota({
       initStartedRef.current = false;
       mapReadyRef.current = false;
 
-      // Desconectar ResizeObserver
       const ro = (container as HTMLDivElement & { _ro?: ResizeObserver })._ro;
       if (ro) ro.disconnect();
 
       if (leafletMapRef.current) {
-        // Limpiar todos los marcadores antes de destruir
-        markersRef.current.forEach((m) => m.remove());
-        markersRef.current.clear();
+        // Usar la referencia local en lugar de markersRef.current
+        markers.forEach((m) => m.remove());
+        markers.clear();
 
         leafletMapRef.current.remove();
         leafletMapRef.current = null;

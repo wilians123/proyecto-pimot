@@ -1,3 +1,1 @@
-// Módulo: pilotos
-// Exporta los componentes públicos del módulo
-export {}
+export { default as Pilotos } from "./components/Pilotos";
