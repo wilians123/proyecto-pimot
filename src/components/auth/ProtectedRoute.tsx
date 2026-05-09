@@ -1,36 +1,20 @@
 // =============================================================
-// CREACIÓN: src/components/auth/ProtectedRoute.tsx
-//
-// Componente que implementa el punto 7 del reporte técnico:
-// "si no hay sesión activa el usuario sea redirigido al login
-//  en lugar de permitirle abrir Flota.tsx"
-//
-// Comportamiento:
-//   • Mientras loading === true  → muestra pantalla de carga
-//   • Si !isAuthenticated        → renderiza <LoginPage />
-//   • Si isAuthenticated         → renderiza los children
-//
 // Esto garantiza que ningún módulo protegido (Flota, Viajes,
 // Dashboard, etc.) se monte sin sesión válida, evitando que
 // los inserts a Supabase lleguen como usuario anónimo.
-//
-// NOTA: se evita useRouter/redirect de Next.js porque AppShell
-// es un Client Component sin lógica de routing basada en URL.
-// El patrón de renderizado condicional es más simple y compatible
-// con la arquitectura SPA actual del proyecto.
 // =============================================================
 
-'use client'
+"use client";
 
-import { useAuth } from '@/context/AuthContext'
-import LoginPage from '@/app/auth/login/page'
+import { useAuth } from "@/context/AuthContext";
+import LoginPage from "@/app/auth/login/page";
 
 interface ProtectedRouteProps {
-  children: React.ReactNode
+  children: React.ReactNode;
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { loading, isAuthenticated } = useAuth()
+  const { loading, isAuthenticated } = useAuth();
 
   // ── Mientras se verifica la sesión inicial ─────────────────
   // (solo ocurre en el primer render, dura < 500ms normalmente)
@@ -44,17 +28,19 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           </div>
           {/* Spinner */}
           <div className="w-8 h-8 border-4 border-slate-200 border-t-orange-500 rounded-full animate-spin" />
-          <p className="text-sm text-slate-500 font-medium">Verificando sesión…</p>
+          <p className="text-sm text-slate-500 font-medium">
+            Verificando sesión…
+          </p>
         </div>
       </div>
-    )
+    );
   }
 
   // ── Sin sesión: mostrar login ──────────────────────────────
   if (!isAuthenticated) {
-    return <LoginPage />
+    return <LoginPage />;
   }
 
   // ── Con sesión: renderizar la app ─────────────────────────
-  return <>{children}</>
+  return <>{children}</>;
 }

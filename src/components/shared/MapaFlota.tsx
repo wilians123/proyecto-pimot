@@ -92,6 +92,16 @@ interface MapaFlotaProps {
   /** Clase de altura Tailwind. Default: "h-80" */
   altura?: string;
   className?: string;
+  /**
+   * tracker_id Navixy a destacar visualmente (marcador naranja ampliado).
+   * Usado por MiniMapaTracker en el panel de detalle de viaje.
+   */
+  highlightTrackerId?: number | null;
+  /**
+   * Si true, hace flyTo hacia el tracker destacado una única vez
+   * (se resetea cada vez que cambia highlightTrackerId).
+   */
+  centerOnHighlight?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -100,21 +110,27 @@ interface MapaFlotaProps {
 export default function MapaFlota({
   altura = "h-80",
   className = "",
+  highlightTrackerId = null,
+  centerOnHighlight = false,
 }: MapaFlotaProps) {
   // ── Refs de Leaflet ──────────────────────────────────────────
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<number, L.Marker>>(new Map());
-  const mapReadyRef = useRef(false); // true cuando invalidateSize se ejecutó
-  const initStartedRef = useRef(false); // evita doble init en StrictMode
+  const mapReadyRef = useRef(false);
+  const initStartedRef = useRef(false);
+  // Evita que el flyTo hacia el highlight se dispare más de una vez
+  const highlightCenteredRef = useRef(false);
 
   // ── Estado del mini menú selector ───────────────────────────
   const [selectorOpen, setSelectorOpen] = useState(false);
+  // El tracker elegido por el usuario desde el menú interno del mapa.
+  // Es independiente de highlightTrackerId (que viene del componente padre).
   const [trackerSeleccionado, setTrackerSeleccionado] = useState<number | null>(
     null,
   );
 
-  // ── Datos GPS ────────────────────────────────────────────────
+  // ── Datos GPS (polling único via useNavixy) ──────────────────
   const { trackers, loading, error, ultimaActualizacion, refetch } = useNavixy({
     intervalo: 15_000,
     activo: true,
@@ -130,13 +146,11 @@ export default function MapaFlota({
       setSelectorOpen(false);
       setTrackerSeleccionado(trackerId);
 
-      // flyTo animado hacia el vehículo seleccionado
       leafletMapRef.current.flyTo([tracker.lat, tracker.lng], 15, {
         animate: true,
         duration: 1.2,
       });
 
-      // Abrir el popup del marcador después de que termine la animación
       const marker = markersRef.current.get(trackerId);
       if (marker) {
         setTimeout(() => marker.openPopup(), 1300);
@@ -147,7 +161,6 @@ export default function MapaFlota({
 
   // ── Inicializar Leaflet (una sola vez) ───────────────────────
   useEffect(() => {
-    // Evita doble init en React StrictMode (que monta 2 veces en dev)
     if (initStartedRef.current || !mapContainerRef.current) return;
     initStartedRef.current = true;
 
@@ -156,10 +169,8 @@ export default function MapaFlota({
     const centro: [number, number] = [15.708, -88.598];
 
     import("leaflet").then((L) => {
-      // Doble-check: el cleanup puede haber corrido antes de que resuelva
       if (!container || leafletMapRef.current) return;
 
-      // Corrige iconos rotos en Webpack/Next.js
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
@@ -195,8 +206,6 @@ export default function MapaFlota({
         });
       });
 
-      // ResizeObserver: llama invalidateSize cuando el contenedor
-      // cambia de tamaño (ej. colapso del sidebar, resize de ventana)
       const ro = new ResizeObserver(() => {
         if (leafletMapRef.current) {
           leafletMapRef.current.invalidateSize();
@@ -204,23 +213,20 @@ export default function MapaFlota({
       });
       ro.observe(container);
 
-      // Guardar referencia al observer para el cleanup
       (container as HTMLDivElement & { _ro?: ResizeObserver })._ro = ro;
     });
 
-    // ── Cleanup al desmontar ──────────────────────────────────
     return () => {
       initStartedRef.current = false;
       mapReadyRef.current = false;
+      highlightCenteredRef.current = false;
 
       const ro = (container as HTMLDivElement & { _ro?: ResizeObserver })._ro;
       if (ro) ro.disconnect();
 
       if (leafletMapRef.current) {
-        // Usar la referencia local en lugar de markersRef.current
         markers.forEach((m) => m.remove());
         markers.clear();
-
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
       }
@@ -253,11 +259,20 @@ export default function MapaFlota({
 
         const color =
           COLOR_MOVIMIENTO[tracker.movimiento] ?? COLOR_MOVIMIENTO.unknown;
-        const seleccionado = tracker.tracker_id === trackerSeleccionado;
-        const svgStr = crearIconoSVG(color, tracker.encendido, seleccionado);
+
+        // Un tracker se muestra como "seleccionado" si:
+        // - el usuario lo eligió desde el menú interno (trackerSeleccionado), O
+        // - es el tracker que el padre quiere destacar (highlightTrackerId)
+        const esSeleccionado =
+          tracker.tracker_id === trackerSeleccionado ||
+          tracker.tracker_id === highlightTrackerId;
+
+        const svgStr = crearIconoSVG(color, tracker.encendido, esSeleccionado);
         const iconUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgStr)))}`;
-        const iconSize: [number, number] = seleccionado ? [44, 53] : [36, 44];
-        const iconAnchor: [number, number] = seleccionado ? [22, 53] : [18, 44];
+        const iconSize: [number, number] = esSeleccionado ? [44, 53] : [36, 44];
+        const iconAnchor: [number, number] = esSeleccionado
+          ? [22, 53]
+          : [18, 44];
 
         const icon = L.icon({
           iconUrl,
@@ -281,14 +296,33 @@ export default function MapaFlota({
             .bindPopup(popupHTML, { maxWidth: 260, className: "pimot-popup" });
           markers.set(tracker.tracker_id, m);
         }
+
+        // ── Centrar en el tracker destacado por el padre (una sola vez) ──
+        if (
+          highlightTrackerId !== null &&
+          tracker.tracker_id === highlightTrackerId &&
+          centerOnHighlight &&
+          !highlightCenteredRef.current &&
+          mapReadyRef.current
+        ) {
+          highlightCenteredRef.current = true;
+          map.flyTo(pos, 15, { animate: true, duration: 1.2 });
+          const marker = markers.get(tracker.tracker_id);
+          if (marker) {
+            setTimeout(() => marker.openPopup(), 1300);
+          }
+        }
       }
 
-      // CORRECCIÓN CAUSA 5: solo ajustar vista si no hay tracker
-      // seleccionado manualmente Y el mapa ya está listo (tiene dimensiones).
+      // Ajustar vista global SOLO si no hay ningún tracker seleccionado
+      // (ni por el usuario ni por el componente padre)
+      const haySeleccionActiva =
+        trackerSeleccionado !== null || highlightTrackerId !== null;
+
       if (
         posicionesValidas.length > 0 &&
         mapReadyRef.current &&
-        trackerSeleccionado === null
+        !haySeleccionActiva
       ) {
         if (posicionesValidas.length === 1) {
           map.setView(posicionesValidas[0], 13, { animate: true });
@@ -305,7 +339,13 @@ export default function MapaFlota({
         }
       }
     });
-  }, [trackers, trackerSeleccionado]);
+  }, [trackers, trackerSeleccionado, highlightTrackerId, centerOnHighlight]);
+
+  // ── Resetear la bandera de centrado cuando cambia el highlight ─
+  // Permite centrar de nuevo al seleccionar un viaje distinto
+  useEffect(() => {
+    highlightCenteredRef.current = false;
+  }, [highlightTrackerId]);
 
   // ── Tiempo desde última actualización ────────────────────────
   const tiempoActualizacion = ultimaActualizacion
@@ -313,7 +353,6 @@ export default function MapaFlota({
     : "Esperando datos…";
 
   // ── Helpers de estilo para el mini menú ──────────────────────
-  // Mismo formato visual que los badges de estado de equipos
   const badgeEstado = (movimiento: string) => {
     if (movimiento === "moving")
       return {
@@ -351,8 +390,6 @@ export default function MapaFlota({
         <div
           ref={mapContainerRef}
           className="absolute inset-0 w-full h-full"
-          // style garantiza que Leaflet SIEMPRE tenga una altura mínima
-          // incluso si la clase Tailwind no se aplicó aún
           style={{ minHeight: 240 }}
         />
 
@@ -392,6 +429,20 @@ export default function MapaFlota({
             >
               Reintentar
             </button>
+          </div>
+        )}
+
+        {/* Badge de cabezal en seguimiento (solo visible cuando viene del padre) */}
+        {!loading && !error && highlightTrackerId !== null && (
+          <div className="absolute top-3 left-3 z-1000">
+            <div
+              className="flex items-center gap-1.5 text-xs font-semibold
+              px-2.5 py-1.5 rounded-full border shadow-md
+              bg-orange-500 text-white border-orange-400"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              Cabezal en seguimiento
+            </div>
           </div>
         )}
 
@@ -514,7 +565,6 @@ export default function MapaFlota({
                       onClick={() => {
                         setTrackerSeleccionado(null);
                         setSelectorOpen(false);
-                        // Volver a ajustar la vista para incluir todos
                         if (leafletMapRef.current) {
                           const posiciones = trackers
                             .filter((t) => t.lat !== null && t.lng !== null)
