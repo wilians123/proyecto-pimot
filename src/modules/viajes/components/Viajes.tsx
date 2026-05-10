@@ -2,15 +2,12 @@
 // Módulo completo de seguimiento de viajes.
 // Carga pilotos, cabezales, chasis y clientes desde Supabase.
 // El formulario incluye viáticos (Q200-Q250) vinculados al viaje.
-// El panel de detalle muestra el mapa GPS en vivo del cabezal asignado
-// a través de MiniMapaTracker (que reutiliza MapaFlota internamente).
+// El panel de detalle muestra datos GPS live y botón de mapa
+// a través de SeguimientoViaje (sin instanciar Leaflet en el panel).
 //
 // v2: handleActualizarEstado y handleConfirmarCancelacion corregidos.
 // v3: Edición de viaje en estado "programado".
-//   - Botón "Editar" en el header del panel de detalle (solo si estado === "programado").
-//   - Reutiliza el mismo formulario del tab "nuevo" precargado con los datos del viaje.
-//   - handleGuardarViaje bifurca: UPDATE si hay viajeEditando, INSERT si no.
-//   - El tab "nuevo" dispara carga de catálogos también cuando viajeEditando !== null.
+// v4: Reemplaza MiniMapaTracker por SeguimientoViaje (tarjetas GPS + modal mapa).
 "use client";
 
 import dynamic from "next/dynamic";
@@ -19,13 +16,13 @@ import { supabase } from "@/lib/supabase";
 import { icons } from "@/lib/constants";
 import type { Database } from "@/types/database";
 
-// MiniMapaTracker usa Leaflet → ssr:false obligatorio
-const MiniMapaTracker = dynamic(
-  () => import("@/components/shared/MiniMapaTracker"),
+// SeguimientoViaje: tarjetas GPS live + modal con MapaFlota. Sin Leaflet inline.
+const SeguimientoViaje = dynamic(
+  () => import("@/components/shared/SeguimientoViaje"),
   {
     ssr: false,
     loading: () => (
-      <div className="h-44 bg-slate-100 rounded-xl animate-pulse" />
+      <div className="h-24 bg-slate-100 rounded-xl animate-pulse" />
     ),
   },
 );
@@ -1173,14 +1170,17 @@ export default function Viajes() {
                       </div>
                     </div>
 
-                    {/* Mini mapa GPS — reutiliza MapaFlota vía MiniMapaTracker */}
+                    {/* Seguimiento GPS — tarjetas de datos live + botón "Ver en mapa" */}
                     <div>
                       <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                        GPS en tiempo real —{" "}
+                        Seguimiento GPS —{" "}
                         {viajeSelec.cabezal?.placa ?? "Sin cabezal"}
                       </p>
-                      <MiniMapaTracker cabezalId={viajeSelec.cabezal_id} />
+                      <SeguimientoViaje
+                        cabezalId={viajeSelec.cabezal_id}
+                        cabezalPlaca={viajeSelec.cabezal?.placa}
+                      />
                     </div>
 
                     {/* ── Cambio de estado ── */}
