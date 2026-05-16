@@ -27,6 +27,10 @@ const SeguimientoViaje = dynamic(
   },
 );
 
+// DestinoAutocomplete: campo de destino con predicción de texto via Nominatim.
+// Solo muestra resultados dentro de Guatemala.
+import DestinoAutocomplete from "@/components/shared/DestinoAutocomplete";
+
 // ── Tipos de base de datos ────────────────────────────────────
 type PilotoRow = Database["public"]["Tables"]["pilotos"]["Row"];
 type CabezalRow = Database["public"]["Tables"]["cabezales"]["Row"];
@@ -1647,20 +1651,38 @@ export default function Viajes() {
                       color="bg-green-100 text-green-700"
                     />
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+                      {/* Origen: siempre Puerto Barrios, no editable */}
                       <Field label="Punto de origen">
-                        <input
-                          type="text"
-                          value={fOrigen}
-                          onChange={(e) => setFOrigen(e.target.value)}
-                          placeholder="Puerto Barrios"
-                          className={inputCls}
-                        />
+                        <div
+                          className={`${inputCls} flex items-center gap-2 opacity-75 cursor-not-allowed select-none`}
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="w-4 h-4 text-slate-400 shrink-0"
+                          >
+                            <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" />
+                            <circle cx="12" cy="10" r="2.5" />
+                          </svg>
+                          <span className="text-slate-700 font-medium">
+                            Puerto Barrios
+                          </span>
+                          <span className="ml-auto text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-md font-medium">
+                            Fijo
+                          </span>
+                        </div>
                       </Field>
+
+                      {/* Destino: campo con autocompletado de Nominatim */}
                       <Field label="Punto de destino" required>
-                        <input
-                          type="text"
+                        <DestinoAutocomplete
                           value={fDestino}
-                          onChange={(e) => setFDestino(e.target.value)}
+                          onChange={setFDestino}
+                          disabled={saving || saveOk}
                           placeholder="Ciudad de Guatemala"
                           className={inputCls}
                         />
