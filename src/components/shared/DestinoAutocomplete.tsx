@@ -25,6 +25,11 @@ interface DestinoAutocompleteProps {
   value: string;
   /** Callback al seleccionar una sugerencia o escribir texto libre */
   onChange: (valor: string) => void;
+  /**
+   * Callback con las coordenadas del lugar seleccionado.
+   * Se llama con null cuando el campo se limpia o el usuario escribe libre.
+   */
+  onCoordenadasChange?: (coords: { lat: number; lng: number } | null) => void;
   disabled?: boolean;
   className?: string;
   placeholder?: string;
@@ -33,6 +38,7 @@ interface DestinoAutocompleteProps {
 export default function DestinoAutocomplete({
   value,
   onChange,
+  onCoordenadasChange,
   disabled = false,
   className = "",
   placeholder = "Ciudad de Guatemala",
@@ -140,15 +146,19 @@ export default function DestinoAutocomplete({
   // (siempre son resultados de Guatemala → es redundante visualmente).
   function seleccionar(item: NominatimResult) {
     const completo = item.display_name;
-    // Quitar el último segmento si es ", Guatemala" para el display del input
     const partes = completo.split(", ");
     const sinPais =
       partes[partes.length - 1].trim() === "Guatemala"
         ? partes.slice(0, -1).join(", ")
         : completo;
 
-    setQuery(sinPais); // lo que ve el usuario en el input
-    onChange(completo); // lo que se guarda en fDestino (dirección completa)
+    setQuery(sinPais);
+    onChange(completo);
+    // Notificar coordenadas al padre para mostrar el marcador en el mapa
+    onCoordenadasChange?.({
+      lat: parseFloat(item.lat),
+      lng: parseFloat(item.lon),
+    });
     setSugerencias([]);
     setAbierto(false);
     setIndiceActivo(-1);
@@ -175,10 +185,11 @@ export default function DestinoAutocomplete({
     }
   }
 
-  // Limpia el campo
+  // Limpia el campo y las coordenadas
   function limpiar() {
     setQuery("");
     onChange("");
+    onCoordenadasChange?.(null);
     setSugerencias([]);
     setAbierto(false);
     inputRef.current?.focus();

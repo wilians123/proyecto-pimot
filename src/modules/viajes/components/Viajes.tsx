@@ -365,6 +365,9 @@ export default function Viajes() {
   const [fClienteId, setFClienteId] = useState("");
   const [fOrigen, setFOrigen] = useState("Puerto Barrios");
   const [fDestino, setFDestino] = useState("");
+  // Coordenadas del destino seleccionado — para mostrar el marcador en el mapa
+  const [fDestinoLat, setFDestinoLat] = useState<number | null>(null);
+  const [fDestinoLng, setFDestinoLng] = useState<number | null>(null);
   const [fFechaInicio, setFInicio] = useState("");
   const [fFechaEst, setFEstimada] = useState("");
   const [fViatico, setFViatico] = useState(String(VIATICO_DEFAULT));
@@ -526,6 +529,9 @@ export default function Viajes() {
       setFClienteId(v.cliente_id ?? "");
       setFOrigen(v.origen ?? "Puerto Barrios");
       setFDestino(v.destino ?? "");
+      // Cargar coordenadas guardadas del destino (para mostrar marcador al editar)
+      setFDestinoLat((v.lat_destino as number | null) ?? null);
+      setFDestinoLng((v.lng_destino as number | null) ?? null);
       setFInicio(
         v.fecha_inicio
           ? new Date(v.fecha_inicio).toISOString().slice(0, 16)
@@ -780,6 +786,8 @@ export default function Viajes() {
         fecha_inicio: fFechaInicio || null,
         fecha_estimada: fFechaEst || null,
         notas: fNotas.trim() || null,
+        lat_destino: fDestinoLat ?? null,
+        lng_destino: fDestinoLng ?? null,
       };
 
       const { error } = await supabase
@@ -828,6 +836,8 @@ export default function Viajes() {
       fecha_inicio: fFechaInicio || null,
       fecha_estimada: fFechaEst || null,
       notas: fNotas.trim() || null,
+      lat_destino: fDestinoLat ?? null,
+      lng_destino: fDestinoLng ?? null,
     };
 
     const { error } = await supabase.from("viajes").insert(payload);
@@ -854,6 +864,8 @@ export default function Viajes() {
     setFClienteId("");
     setFOrigen("Puerto Barrios");
     setFDestino("");
+    setFDestinoLat(null);
+    setFDestinoLng(null);
     setFInicio("");
     setFEstimada("");
     setFViatico(String(VIATICO_DEFAULT));
@@ -1184,6 +1196,20 @@ export default function Viajes() {
                       <SeguimientoViaje
                         cabezalId={viajeSelec.cabezal_id}
                         cabezalPlaca={viajeSelec.cabezal?.placa}
+                        destinoLat={
+                          (viajeSelec.lat_destino as number | null) ?? null
+                        }
+                        destinoLng={
+                          (viajeSelec.lng_destino as number | null) ?? null
+                        }
+                        destinoNombre={
+                          viajeSelec.destino
+                            ? viajeSelec.destino
+                                .split(", ")
+                                .slice(0, 2)
+                                .join(", ")
+                            : null
+                        }
                       />
                     </div>
 
@@ -1682,6 +1708,10 @@ export default function Viajes() {
                         <DestinoAutocomplete
                           value={fDestino}
                           onChange={setFDestino}
+                          onCoordenadasChange={(coords) => {
+                            setFDestinoLat(coords?.lat ?? null);
+                            setFDestinoLng(coords?.lng ?? null);
+                          }}
                           disabled={saving || saveOk}
                           placeholder="Ciudad de Guatemala"
                           className={inputCls}

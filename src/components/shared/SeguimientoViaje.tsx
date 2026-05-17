@@ -1,3 +1,7 @@
+// SeguimientoViaje.tsx
+// Panel de seguimiento GPS para el detalle de un viaje activo.
+// Muestra tarjetas de datos live y un botón que abre MapaFlota
+// centrado en el cabezal del viaje. Sin instancia propia de Leaflet.
 "use client";
 
 import dynamic from "next/dynamic";
@@ -19,17 +23,24 @@ interface SeguimientoViajeProps {
   cabezalId: string | null;
   /** Placa del cabezal para mostrar en labels */
   cabezalPlaca?: string | null;
+  /** Coordenadas del punto de destino para mostrar el marcador de meta en el mapa */
+  destinoLat?: number | null;
+  destinoLng?: number | null;
+  /** Nombre resumido del destino para el popup del marcador (2-3 segmentos de la dirección) */
+  destinoNombre?: string | null;
 }
 
 export default function SeguimientoViaje({
   cabezalId,
   cabezalPlaca,
+  destinoLat = null,
+  destinoLng = null,
+  destinoNombre = null,
 }: SeguimientoViajeProps) {
   const [modalAbierto, setModalAbierto] = useState(false);
 
   // useNavixy: polling de 15s, igual que en el Dashboard.
-  // Enriquece cada tracker con cabezal_id desde /api/gps/trackers
-  // (que lee navixy_trackers JOIN cabezales).
+  // Enriquece cada tracker con cabezal_id desde /api/gps/trackers.
   // Solo activo si hay un cabezalId válido.
   const { trackers, ultimaActualizacion } = useNavixy({
     intervalo: 15_000,
@@ -37,16 +48,15 @@ export default function SeguimientoViaje({
   });
 
   // Encontrar el tracker del viaje comparando cabezal_id (UUID).
-  // TrackerConCabezal.cabezal_id viene del JOIN en /api/gps/trackers.
-  // Esto funciona una vez que navixy_trackers.cabezal_id está vinculado.
+  // Funciona una vez que navixy_trackers.cabezal_id está vinculado (fix SQL).
   const datosTracker = useMemo(() => {
     if (!cabezalId) return null;
     return trackers.find((t) => t.cabezal_id === cabezalId) ?? null;
   }, [trackers, cabezalId]);
 
-  // Estado para mostrar el tiempo transcurrido desde la última actualización.
-  // Se calcula en un efecto con un intervalo de 1s para mantenerlo actualizado
-  // sin llamar Date.now() durante el render (función impura en Strict Mode).
+  // Tiempo desde la última actualización GPS.
+  // Se calcula dentro de un useEffect con setInterval de 1s para no llamar
+  // Date.now() durante el render (función impura → error en React Strict Mode).
   const [tiempoActualizado, setTiempoActualizado] = useState<string | null>(
     null,
   );
@@ -66,7 +76,7 @@ export default function SeguimientoViaje({
     return () => clearInterval(id);
   }, [ultimaActualizacion]);
 
-  // Estado de movimiento para estilos de badge
+  // Estilos del badge de estado de movimiento
   const estadoMov = useMemo(() => {
     if (!datosTracker) return null;
     if (datosTracker.movimiento === "moving")
@@ -113,7 +123,7 @@ export default function SeguimientoViaje({
     );
   }
 
-  // ── Cargando (trackers vacíos en el primer poll) ──────────────
+  // ── Cargando (primer poll aún no completado) ──────────────────
   if (trackers.length === 0) {
     return (
       <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-2 text-slate-400 animate-pulse">
@@ -123,9 +133,7 @@ export default function SeguimientoViaje({
     );
   }
 
-  // ── Cabezal sin tracker Navixy vinculado ──────────────────────
-  // Ocurre cuando navixy_trackers.cabezal_id sigue en NULL.
-  // El SQL fix_navixy_trackers_link.sql corrige esto.
+  // ── Sin tracker Navixy vinculado ──────────────────────────────
   if (!datosTracker) {
     return (
       <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-3 flex items-start gap-3">
@@ -310,13 +318,17 @@ export default function SeguimientoViaje({
               </button>
             </div>
 
-            {/* MapaFlota centrado en el tracker del viaje */}
+            {/* MapaFlota centrado en el tracker del viaje con marcador de destino */}
             <div className="flex-1 overflow-hidden">
               <MapaFlota
                 altura="h-full"
                 className="h-full"
                 highlightTrackerId={datosTracker.tracker_id}
                 centerOnHighlight={true}
+                destinoLat={destinoLat}
+                destinoLng={destinoLng}
+                destinoNombre={destinoNombre}
+                modoSeguimiento={true}
               />
             </div>
 
