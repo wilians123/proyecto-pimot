@@ -21,6 +21,7 @@ export type EstadoViajeDB =
   | "programado"
   | "en_transito"
   | "en_destino"
+  | "de_vuelta"
   | "finalizado"
   | "cancelado";
 export type NivelAlertaDB = "info" | "advertencia" | "critico";

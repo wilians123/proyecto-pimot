@@ -1,3 +1,3 @@
 // Módulo: usuarios
 // Exporta los componentes públicos del módulo
-export {}
+export { default as Usuarios } from "./components/Usuarios";

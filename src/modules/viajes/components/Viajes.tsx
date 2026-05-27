@@ -38,7 +38,11 @@ type ChasisRow = Database["public"]["Tables"]["chasis"]["Row"];
 type ClienteRow = Database["public"]["Tables"]["clientes"]["Row"];
 type ViajeRow = Database["public"]["Tables"]["viajes"]["Row"];
 type ViajeInsert = Database["public"]["Tables"]["viajes"]["Insert"];
-type EstadoViaje = Database["public"]["Tables"]["viajes"]["Row"]["estado"];
+// Incluye "de_vuelta" que se agrega con la migración SQL.
+// Si el tipo generado de Supabase aún no lo tiene, se extiende aquí.
+type EstadoViaje =
+  | Database["public"]["Tables"]["viajes"]["Row"]["estado"]
+  | "de_vuelta";
 
 // Viaje enriquecido con relaciones
 interface ViajeCompleto extends ViajeRow {
@@ -89,16 +93,27 @@ const ESTADO_VIAJE_CONFIG: Record<
     text: "text-red-700",
     dot: "bg-red-400",
   },
+  de_vuelta: {
+    label: "De Vuelta",
+    bg: "bg-purple-100",
+    text: "text-purple-800",
+    dot: "bg-purple-500",
+  },
 };
 
-// Transiciones válidas por estado actual
-const SIGUIENTES_ESTADOS: Record<EstadoViaje, EstadoViaje[]> = {
-  programado: ["en_transito", "cancelado"],
-  en_transito: ["en_destino", "cancelado"],
-  en_destino: ["finalizado", "cancelado"],
-  finalizado: [],
-  cancelado: [],
-};
+// Transiciones manuales disponibles según estado y si el viaje está bloqueado.
+// Cuando bloqueado=true las transiciones son automáticas — el operador solo puede cancelar
+// hasta que la unidad cruce el punto de origen, momento en que cancelar también desaparece.
+function getSiguientesEstados(
+  estado: EstadoViaje,
+  bloqueado: boolean,
+): EstadoViaje[] {
+  if (estado === "finalizado" || estado === "cancelado") return [];
+  // Una vez bloqueado (unidad en camino), ninguna opción manual disponible
+  if (bloqueado) return [];
+  // Unidad aún en Puerto Barrios: solo se puede cancelar
+  return ["cancelado"];
+}
 
 // ── Estilos reutilizables ─────────────────────────────────────
 const inputCls =
@@ -413,7 +428,7 @@ export default function Viajes() {
     const { data, error } = await supabase
       .from("viajes")
       .select(SELECT_VIAJE)
-      .in("estado", ["programado", "en_transito", "en_destino"])
+      .in("estado", ["programado", "en_transito", "en_destino", "de_vuelta"])
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
@@ -433,7 +448,7 @@ export default function Viajes() {
       const { data, error } = await supabase
         .from("viajes")
         .select(SELECT_VIAJE)
-        .in("estado", ["programado", "en_transito", "en_destino"])
+        .in("estado", ["programado", "en_transito", "en_destino", "de_vuelta"])
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
@@ -637,13 +652,24 @@ export default function Viajes() {
     // Construimos el objeto de actualización con los campos exactos de la tabla.
     // Usamos Record<string, string | null> para evitar conflictos con el tipo generado
     // (que puede no incluir deleted_at en el tipado base).
+    // estado se castea a string porque "de_vuelta" aún no está en el tipo
+    // generado de Supabase (se agrega con la migración SQL).
     const updates: Record<string, string | null> = {
-      estado: estadoDestino,
+      estado: estadoDestino as string,
     };
 
     // Registrar timestamps según el estado destino
     if (estadoDestino === "en_transito") {
       updates.fecha_inicio = ahora;
+      updates.bloqueado = "true";
+    }
+    if (estadoDestino === "en_destino") {
+      updates.fecha_llegada_destino = ahora;
+      updates.lecturas_fuera_destino = "0";
+    }
+    if (estadoDestino === "de_vuelta") {
+      updates.fecha_salida_destino = ahora;
+      updates.lecturas_fuera_destino = "0";
     }
     if (estadoDestino === "finalizado") {
       updates.fecha_fin = ahora;
@@ -703,7 +729,7 @@ export default function Viajes() {
 
     const ahora = new Date().toISOString();
     const updates: Record<string, string | null> = {
-      estado: "cancelado",
+      estado: "cancelado" as string,
       fecha_fin: ahora,
     };
 
@@ -1087,29 +1113,31 @@ export default function Viajes() {
                     </div>
                     <div className="flex items-center gap-2">
                       {/* Botón Editar — solo visible cuando el viaje aún no ha iniciado */}
-                      {viajeSelec.estado === "programado" && (
-                        <button
-                          onClick={() => handleEditarViaje(viajeSelec)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10
+                      {viajeSelec.estado === "programado" &&
+                        !(viajeSelec as ViajeCompleto & { bloqueado?: boolean })
+                          .bloqueado && (
+                          <button
+                            onClick={() => handleEditarViaje(viajeSelec)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10
                             hover:bg-white/20 text-white text-xs font-semibold rounded-lg
                             border border-white/20 transition-colors cursor-pointer"
-                          title="Editar viaje"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-3.5 h-3.5"
+                            title="Editar viaje"
                           >
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                          Editar
-                        </button>
-                      )}
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="w-3.5 h-3.5"
+                            >
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                            Editar
+                          </button>
+                        )}
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
                           text-xs font-semibold
@@ -1126,6 +1154,33 @@ export default function Viajes() {
 
                   <div className="p-5 space-y-4">
                     {/* Datos del viaje */}
+                    {(viajeSelec as ViajeCompleto & { bloqueado?: boolean })
+                      .bloqueado && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="w-4 h-4 text-amber-600 shrink-0"
+                        >
+                          <rect
+                            x="3"
+                            y="11"
+                            width="18"
+                            height="11"
+                            rx="2"
+                            ry="2"
+                          />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                        <p className="text-xs font-semibold text-amber-700">
+                          Viaje en curso — edición bloqueada
+                        </p>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: "Origen", value: viajeSelec.origen },
@@ -1210,11 +1265,32 @@ export default function Viajes() {
                                 .join(", ")
                             : null
                         }
+                        viajeId={viajeSelec.id}
+                        estadoViaje={viajeSelec.estado}
+                        bloqueado={
+                          (
+                            viajeSelec as ViajeCompleto & {
+                              bloqueado?: boolean;
+                            }
+                          ).bloqueado ?? false
+                        }
+                        lecturasFueraDestino={
+                          (
+                            viajeSelec as ViajeCompleto & {
+                              lecturas_fuera_destino?: number;
+                            }
+                          ).lecturas_fuera_destino ?? 0
+                        }
+                        onEstadoCambiado={refetchActivos}
                       />
                     </div>
 
                     {/* ── Cambio de estado ── */}
-                    {SIGUIENTES_ESTADOS[viajeSelec.estado].length > 0 && (
+                    {getSiguientesEstados(
+                      viajeSelec.estado,
+                      (viajeSelec as ViajeCompleto & { bloqueado?: boolean })
+                        .bloqueado ?? false,
+                    ).length > 0 && (
                       <div className="space-y-2">
                         <div className="flex gap-2">
                           <select
@@ -1228,7 +1304,14 @@ export default function Viajes() {
                             className={`flex-1 ${selectCls}`}
                           >
                             <option value="">Cambiar estado a…</option>
-                            {SIGUIENTES_ESTADOS[viajeSelec.estado].map((s) => (
+                            {getSiguientesEstados(
+                              viajeSelec.estado,
+                              (
+                                viajeSelec as ViajeCompleto & {
+                                  bloqueado?: boolean;
+                                }
+                              ).bloqueado ?? false,
+                            ).map((s) => (
                               <option key={s} value={s}>
                                 {ESTADO_VIAJE_CONFIG[s].label}
                               </option>

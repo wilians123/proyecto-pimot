@@ -1,14 +1,15 @@
 // SeguimientoViaje.tsx
-// Panel de seguimiento GPS para el detalle de un viaje activo.
-// Muestra tarjetas de datos live y un botón que abre MapaFlota
-// centrado en el cabezal del viaje. Sin instancia propia de Leaflet.
+// Panel de seguimiento GPS del viaje activo.
+// Gestiona la automatización de estados via geofence y muestra
+// datos live del tracker. Abre modal con MapaFlota al pulsar "Ver en mapa".
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { useNavixy } from "@/hooks/useNavixy";
+import { useGeofence } from "@/hooks/useGeofence";
 
-// MapaFlota solo monta cuando el modal está abierto → un solo Leaflet activo
 const MapaFlota = dynamic(() => import("@/components/shared/MapaFlota"), {
   ssr: false,
   loading: () => (
@@ -19,15 +20,16 @@ const MapaFlota = dynamic(() => import("@/components/shared/MapaFlota"), {
 });
 
 interface SeguimientoViajeProps {
-  /** UUID del cabezal en la tabla cabezales */
   cabezalId: string | null;
-  /** Placa del cabezal para mostrar en labels */
   cabezalPlaca?: string | null;
-  /** Coordenadas del punto de destino para mostrar el marcador de meta en el mapa */
   destinoLat?: number | null;
   destinoLng?: number | null;
-  /** Nombre resumido del destino para el popup del marcador (2-3 segmentos de la dirección) */
   destinoNombre?: string | null;
+  viajeId: string;
+  estadoViaje: string;
+  bloqueado: boolean;
+  lecturasFueraDestino: number;
+  onEstadoCambiado: () => void;
 }
 
 export default function SeguimientoViaje({
@@ -36,47 +38,156 @@ export default function SeguimientoViaje({
   destinoLat = null,
   destinoLng = null,
   destinoNombre = null,
+  viajeId,
+  estadoViaje,
+  bloqueado,
+  lecturasFueraDestino,
+  onEstadoCambiado,
 }: SeguimientoViajeProps) {
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [procesandoTransicion, setProcesandoTransicion] = useState(false);
 
-  // useNavixy: polling de 15s, igual que en el Dashboard.
-  // Enriquece cada tracker con cabezal_id desde /api/gps/trackers.
-  // Solo activo si hay un cabezalId válido.
+  // Contador local de lecturas consecutivas fuera del radio de inicio.
+  const [lecturasInicioConfirm, setLecturasInicioConfirm] = useState(0);
+
   const { trackers, ultimaActualizacion } = useNavixy({
     intervalo: 15_000,
     activo: !!cabezalId,
   });
 
-  // Encontrar el tracker del viaje comparando cabezal_id (UUID).
-  // Funciona una vez que navixy_trackers.cabezal_id está vinculado (fix SQL).
   const datosTracker = useMemo(() => {
     if (!cabezalId) return null;
     return trackers.find((t) => t.cabezal_id === cabezalId) ?? null;
   }, [trackers, cabezalId]);
 
-  // Tiempo desde la última actualización GPS.
-  // Se calcula dentro de un useEffect con setInterval de 1s para no llamar
-  // Date.now() durante el render (función impura → error en React Strict Mode).
+  const { transicion, distanciaDestinoM } = useGeofence({
+    trackerLat: datosTracker?.lat ?? null,
+    trackerLng: datosTracker?.lng ?? null,
+    estadoActual: estadoViaje,
+    destinoLat,
+    destinoLng,
+    bloqueado,
+    lecturasFueraDestino,
+    lecturasInicioConfirm,
+  });
+
+  // Ref con el Set de transiciones ya enviadas en este montaje.
+  const transicionesEnviadasRef = useRef<Set<string>>(new Set());
+
+  // Timeout de seguridad: si procesandoTransicion queda en true más de 12s
+  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const limpiarSafetyTimer = useCallback(() => {
+    if (safetyTimerRef.current) {
+      clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = null;
+    }
+  }, []);
+
+  // Llama la RPC de Supabase para cambiar el estado del viaje.
+  const ejecutarTransicion = useCallback(
+    async (estadoNuevo: string) => {
+      setProcesandoTransicion(true);
+      limpiarSafetyTimer();
+
+      // Timeout de seguridad: libera el spinner si la RPC no responde en 12s
+      safetyTimerRef.current = setTimeout(() => {
+        setProcesandoTransicion(false);
+        console.warn("[SeguimientoViaje] RPC timeout — reseteando spinner");
+      }, 12_000);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.rpc as any)(
+        "actualizar_estado_viaje_automatico",
+        {
+          p_viaje_id: viajeId,
+          p_estado_nuevo: estadoNuevo,
+          p_fecha_timestamp: new Date().toISOString(),
+        },
+      );
+
+      limpiarSafetyTimer();
+      setProcesandoTransicion(false);
+
+      if (!error) {
+        onEstadoCambiado();
+      } else {
+        console.error("[SeguimientoViaje] Error RPC:", error.message);
+      }
+    },
+    [viajeId, onEstadoCambiado, limpiarSafetyTimer],
+  );
+
+  // Incrementa el contador de lecturas fuera del destino en DB.
+  const incrementarContadorDestino = useCallback(async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.rpc as any)("incrementar_lecturas_fuera_destino", {
+      p_viaje_id: viajeId,
+    });
+    onEstadoCambiado();
+  }, [viajeId, onEstadoCambiado]);
+
+  // Procesar la transición detectada por el geofence.
+  useEffect(() => {
+    if (!transicion || procesandoTransicion) return;
+    if (trackers.length === 0) return;
+
+    const clave = `${estadoViaje}:${transicion}`;
+    if (transicionesEnviadasRef.current.has(clave)) return;
+    transicionesEnviadasRef.current.add(clave);
+
+    // Envolvemos todo el bloque de decisiones en un único setTimeout diferido.
+    // Esto garantiza que cualquier mutación colateral (local o del padre mediante callbacks)
+    // ocurra de manera segura fuera del ciclo síncrono del efecto actual de React.
+    const t = setTimeout(() => {
+      if (transicion === "salida_inicio") {
+        setLecturasInicioConfirm((prev) => prev + 1);
+      } else if (transicion === "salida_destino") {
+        incrementarContadorDestino();
+      } else {
+        ejecutarTransicion(transicion);
+      }
+    }, 0);
+
+    return () => clearTimeout(t);
+  }, [
+    transicion,
+    procesandoTransicion,
+    estadoViaje,
+    trackers.length,
+    ejecutarTransicion,
+    incrementarContadorDestino,
+  ]);
+
+  // Limpiar el Set cuando cambia el estado del viaje (transición completada)
+  useEffect(() => {
+    transicionesEnviadasRef.current.clear();
+    if (estadoViaje !== "programado") {
+      const t = setTimeout(() => {
+        setLecturasInicioConfirm(0);
+      }, 0);
+      return () => clearTimeout(t);
+    }
+  }, [estadoViaje]);
+
+  // Limpiar timer de seguridad al desmontar
+  useEffect(() => () => limpiarSafetyTimer(), [limpiarSafetyTimer]);
+
+  // Tiempo desde la última actualización GPS (actualizado cada segundo)
   const [tiempoActualizado, setTiempoActualizado] = useState<string | null>(
     null,
   );
-
   useEffect(() => {
     if (!ultimaActualizacion) return;
-
     const calcular = () => {
-      const segundos = Math.round(
-        (Date.now() - ultimaActualizacion.getTime()) / 1000,
-      );
-      setTiempoActualizado(`Actualizado ${segundos}s atrás`);
+      const s = Math.round((Date.now() - ultimaActualizacion.getTime()) / 1000);
+      setTiempoActualizado(`Actualizado ${s}s atrás`);
     };
-
     calcular();
     const id = setInterval(calcular, 1_000);
     return () => clearInterval(id);
   }, [ultimaActualizacion]);
 
-  // Estilos del badge de estado de movimiento
   const estadoMov = useMemo(() => {
     if (!datosTracker) return null;
     if (datosTracker.movimiento === "moving")
@@ -101,7 +212,7 @@ export default function SeguimientoViaje({
     };
   }, [datosTracker]);
 
-  // ── Sin cabezal asignado ──────────────────────────────────────
+  // ── Sin cabezal ───────────────────────────────────────────────
   if (!cabezalId) {
     return (
       <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3 text-slate-400">
@@ -123,7 +234,7 @@ export default function SeguimientoViaje({
     );
   }
 
-  // ── Cargando (primer poll aún no completado) ──────────────────
+  // ── Cargando primer poll ──────────────────────────────────────
   if (trackers.length === 0) {
     return (
       <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-2 text-slate-400 animate-pulse">
@@ -164,11 +275,10 @@ export default function SeguimientoViaje({
     );
   }
 
-  // ── Tracker encontrado: tarjetas de datos + botón de mapa ─────
+  // ── Tracker encontrado ────────────────────────────────────────
   return (
     <>
       <div className="space-y-2.5">
-        {/* Header con label del tracker y tiempo de actualización */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
@@ -181,9 +291,7 @@ export default function SeguimientoViaje({
           )}
         </div>
 
-        {/* Tarjetas de datos live */}
         <div className="grid grid-cols-2 gap-2">
-          {/* Velocidad */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5">
             <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wide mb-0.5">
               Velocidad
@@ -196,7 +304,6 @@ export default function SeguimientoViaje({
             </p>
           </div>
 
-          {/* Estado de movimiento */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5">
             <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wide mb-0.5">
               Estado
@@ -211,7 +318,6 @@ export default function SeguimientoViaje({
             )}
           </div>
 
-          {/* Motor */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5">
             <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wide mb-0.5">
               Motor
@@ -228,7 +334,6 @@ export default function SeguimientoViaje({
             </div>
           </div>
 
-          {/* Batería */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5">
             <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wide mb-0.5">
               Batería
@@ -251,7 +356,28 @@ export default function SeguimientoViaje({
           </div>
         </div>
 
-        {/* Botón para abrir el mapa */}
+        {distanciaDestinoM !== null && (
+          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-3.5 py-2">
+            <p className="text-xs font-semibold text-blue-700">
+              Distancia al destino
+            </p>
+            <p className="text-sm font-black text-blue-800 tabular-nums">
+              {distanciaDestinoM >= 1000
+                ? `${(distanciaDestinoM / 1000).toFixed(1)} km`
+                : `${Math.round(distanciaDestinoM)} m`}
+            </p>
+          </div>
+        )}
+
+        {procesandoTransicion && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
+            <span className="w-3 h-3 border-2 border-amber-400 border-t-amber-700 rounded-full animate-spin shrink-0" />
+            <p className="text-xs font-semibold text-amber-700">
+              Actualizando estado del viaje…
+            </p>
+          </div>
+        )}
+
         <button
           onClick={() => setModalAbierto(true)}
           className="w-full flex items-center justify-center gap-2 py-2.5 px-4
@@ -274,21 +400,16 @@ export default function SeguimientoViaje({
         </button>
       </div>
 
-      {/* Modal del mapa — MapaFlota solo existe mientras el modal está abierto */}
       {modalAbierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Overlay */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setModalAbierto(false)}
           />
-
-          {/* Panel */}
           <div
             className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden z-10"
             style={{ height: "min(80dvh, 600px)" }}
           >
-            {/* Header del modal */}
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50 shrink-0">
               <div className="flex items-center gap-2.5">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -318,7 +439,6 @@ export default function SeguimientoViaje({
               </button>
             </div>
 
-            {/* MapaFlota centrado en el tracker del viaje con marcador de destino */}
             <div className="flex-1 overflow-hidden">
               <MapaFlota
                 altura="h-full"
@@ -332,7 +452,6 @@ export default function SeguimientoViaje({
               />
             </div>
 
-            {/* Footer con resumen de datos */}
             <div className="shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center gap-4 text-xs">
               <span className="flex items-center gap-1.5 font-semibold text-slate-700">
                 <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />

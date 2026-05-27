@@ -14,6 +14,7 @@ import Pilotos from "@/modules/pilotos/components/Pilotos";
 import ModuloPlaceholder from "@/components/shared/ModuloPlaceholder";
 import AlertaBadge from "@/components/shared/AlertaBadge";
 import KpiCard from "@/components/shared/KpiCard";
+import Usuarios from "@/modules/usuarios/components/Usuarios";
 import { MODULO_HEADERS, ALERTAS_MUESTRA } from "@/lib/constants";
 import type { ModuloId } from "@/types/ui";
 
@@ -37,6 +38,8 @@ export default function AppShell() {
         return <Flota />;
       case "pilotos":
         return <Pilotos />;
+      case "usuarios":
+        return <Usuarios />;
 
       case "alertas":
         return (
