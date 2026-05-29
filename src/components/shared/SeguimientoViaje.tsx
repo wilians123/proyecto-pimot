@@ -6,9 +6,10 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useNavixy } from "@/hooks/useNavixy";
 import { useGeofence } from "@/hooks/useGeofence";
+import { actualizarEstadoViaje, incrementarLecturasDestino } from "@/services/viajes.service";
+import type { EstadoViaje } from "@/types";
 
 const MapaFlota = dynamic(() => import("@/components/shared/MapaFlota"), {
   ssr: false,
@@ -74,7 +75,7 @@ export default function SeguimientoViaje({
   // Ref con el Set de transiciones ya enviadas en este montaje.
   const transicionesEnviadasRef = useRef<Set<string>>(new Set());
 
-  // Timeout de seguridad: si procesandoTransicion queda en true más de 12s
+  // Timeout de seguridad: si procesandoTransicion queda en true más de 8s
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const limpiarSafetyTimer = useCallback(() => {
@@ -84,27 +85,19 @@ export default function SeguimientoViaje({
     }
   }, []);
 
-  // Llama la RPC de Supabase para cambiar el estado del viaje.
+  // Procesa la actualización de estado del viaje
   const ejecutarTransicion = useCallback(
     async (estadoNuevo: string) => {
       setProcesandoTransicion(true);
       limpiarSafetyTimer();
 
-      // Timeout de seguridad: libera el spinner si la RPC no responde en 12s
+      // Timeout de seguridad: libera el spinner si la operación no responde en 8s
       safetyTimerRef.current = setTimeout(() => {
         setProcesandoTransicion(false);
-        console.warn("[SeguimientoViaje] RPC timeout — reseteando spinner");
-      }, 12_000);
+        console.warn("[SeguimientoViaje] Actualización timeout — reseteando spinner");
+      }, 8_000);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase.rpc as any)(
-        "actualizar_estado_viaje_automatico",
-        {
-          p_viaje_id: viajeId,
-          p_estado_nuevo: estadoNuevo,
-          p_fecha_timestamp: new Date().toISOString(),
-        },
-      );
+      const { error } = await actualizarEstadoViaje(viajeId, estadoNuevo as EstadoViaje);
 
       limpiarSafetyTimer();
       setProcesandoTransicion(false);
@@ -112,19 +105,20 @@ export default function SeguimientoViaje({
       if (!error) {
         onEstadoCambiado();
       } else {
-        console.error("[SeguimientoViaje] Error RPC:", error.message);
+        console.error("[SeguimientoViaje] Error actualizando estado:", error);
       }
     },
     [viajeId, onEstadoCambiado, limpiarSafetyTimer],
   );
 
-  // Incrementa el contador de lecturas fuera del destino en DB.
+  // Incrementa el contador de lecturas fuera del destino
   const incrementarContadorDestino = useCallback(async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.rpc as any)("incrementar_lecturas_fuera_destino", {
-      p_viaje_id: viajeId,
-    });
-    onEstadoCambiado();
+    const { error } = await incrementarLecturasDestino(viajeId);
+    if (!error) {
+      onEstadoCambiado();
+    } else {
+      console.error("[SeguimientoViaje] Error incrementando contador:", error);
+    }
   }, [viajeId, onEstadoCambiado]);
 
   // Procesar la transición detectada por el geofence.
@@ -136,9 +130,7 @@ export default function SeguimientoViaje({
     if (transicionesEnviadasRef.current.has(clave)) return;
     transicionesEnviadasRef.current.add(clave);
 
-    // Envolvemos todo el bloque de decisiones en un único setTimeout diferido.
-    // Esto garantiza que cualquier mutación colateral (local o del padre mediante callbacks)
-    // ocurra de manera segura fuera del ciclo síncrono del efecto actual de React.
+    // Diferir la ejecución para evitar race conditions
     const t = setTimeout(() => {
       if (transicion === "salida_inicio") {
         setLecturasInicioConfirm((prev) => prev + 1);
@@ -159,7 +151,7 @@ export default function SeguimientoViaje({
     incrementarContadorDestino,
   ]);
 
-  // Limpiar el Set cuando cambia el estado del viaje (transición completada)
+  // Limpiar el Set cuando cambia el estado del viaje
   useEffect(() => {
     transicionesEnviadasRef.current.clear();
     if (estadoViaje !== "programado") {
@@ -173,7 +165,7 @@ export default function SeguimientoViaje({
   // Limpiar timer de seguridad al desmontar
   useEffect(() => () => limpiarSafetyTimer(), [limpiarSafetyTimer]);
 
-  // Tiempo desde la última actualización GPS (actualizado cada segundo)
+  // Tiempo desde la última actualización GPS
   const [tiempoActualizado, setTiempoActualizado] = useState<string | null>(
     null,
   );
@@ -486,3 +478,4 @@ export default function SeguimientoViaje({
     </>
   );
 }
+

@@ -7,6 +7,7 @@ export const ESTADO_VIAJE_CONFIG: Record<EstadoViaje, { label: string; color: st
   programado:  { label: 'Programado',  color: 'bg-slate-100 text-slate-600',   dot: 'bg-slate-400'  },
   en_transito: { label: 'En Tránsito', color: 'bg-blue-50 text-blue-700',      dot: 'bg-blue-500'   },
   en_destino:  { label: 'En Destino',  color: 'bg-amber-50 text-amber-700',    dot: 'bg-amber-500'  },
+  de_vuelta:   { label: 'De Vuelta',   color: 'bg-purple-50 text-purple-700',  dot: 'bg-purple-500' },
   finalizado:  { label: 'Finalizado',  color: 'bg-green-50 text-green-700',    dot: 'bg-green-500'  },
   cancelado:   { label: 'Cancelado',   color: 'bg-red-50 text-red-600',        dot: 'bg-red-400'    },
 }

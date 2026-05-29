@@ -220,6 +220,8 @@ export interface Database {
           fecha_inicio: string | null;
           fecha_estimada: string | null;
           fecha_fin: string | null;
+          fecha_llegada_destino: string | null;
+          fecha_salida_destino: string | null;
           duracion_real_min: number | null;
           piloto_id: string | null;
           cabezal_id: string | null;
@@ -231,6 +233,9 @@ export interface Database {
           viatico_monto: number | null;
           notas: string | null;
           creado_por: string | null;
+          bloqueado: boolean;
+          lecturas_fuera_destino: number;
+          deleted_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -248,6 +253,8 @@ export interface Database {
           fecha_inicio?: string | null;
           fecha_estimada?: string | null;
           fecha_fin?: string | null;
+          fecha_llegada_destino?: string | null;
+          fecha_salida_destino?: string | null;
           piloto_id?: string | null;
           cabezal_id?: string | null;
           chasis_id?: string | null;
@@ -258,6 +265,9 @@ export interface Database {
           viatico_monto?: number | null;
           notas?: string | null;
           creado_por?: string | null;
+          bloqueado?: boolean;
+          lecturas_fuera_destino?: number;
+          deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -274,6 +284,8 @@ export interface Database {
           fecha_inicio?: string | null;
           fecha_estimada?: string | null;
           fecha_fin?: string | null;
+          fecha_llegada_destino?: string | null;
+          fecha_salida_destino?: string | null;
           piloto_id?: string | null;
           cabezal_id?: string | null;
           chasis_id?: string | null;
@@ -284,6 +296,9 @@ export interface Database {
           viatico_monto?: number | null;
           notas?: string | null;
           creado_por?: string | null;
+          bloqueado?: boolean;
+          lecturas_fuera_destino?: number;
+          deleted_at?: string | null;
           updated_at?: string;
         };
 

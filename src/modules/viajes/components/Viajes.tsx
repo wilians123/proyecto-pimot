@@ -638,9 +638,6 @@ export default function Viajes() {
   );
 
   // ── Actualizar estado del viaje ───────────────────────────────
-  // CORRECCIÓN: se tipan los campos de fecha como string (ISO) para que
-  // Supabase los acepte, y se re-sincroniza viajeSelec desde el array
-  // refrescado en lugar de usar el objeto stale anterior.
   const handleActualizarEstado = async (estadoDestino: EstadoViaje) => {
     if (!viajeSelec) return;
 
@@ -649,30 +646,26 @@ export default function Viajes() {
 
     const ahora = new Date().toISOString();
 
-    // Construimos el objeto de actualización con los campos exactos de la tabla.
-    // Usamos Record<string, string | null> para evitar conflictos con el tipo generado
-    // (que puede no incluir deleted_at en el tipado base).
-    // estado se castea a string porque "de_vuelta" aún no está en el tipo
-    // generado de Supabase (se agrega con la migración SQL).
-    const updates: Record<string, string | null> = {
-      estado: estadoDestino as string,
+    const updates: Record<string, unknown> = {
+      estado: estadoDestino,
     };
 
-    // Registrar timestamps según el estado destino
+    // Registrar timestamps y flags según el estado destino
     if (estadoDestino === "en_transito") {
       updates.fecha_inicio = ahora;
-      updates.bloqueado = "true";
+      updates.bloqueado = true;
     }
     if (estadoDestino === "en_destino") {
       updates.fecha_llegada_destino = ahora;
-      updates.lecturas_fuera_destino = "0";
+      updates.lecturas_fuera_destino = 0;
     }
     if (estadoDestino === "de_vuelta") {
       updates.fecha_salida_destino = ahora;
-      updates.lecturas_fuera_destino = "0";
+      updates.lecturas_fuera_destino = 0;
     }
     if (estadoDestino === "finalizado") {
       updates.fecha_fin = ahora;
+      updates.bloqueado = false;
     }
 
     const { error } = await supabase
@@ -693,7 +686,6 @@ export default function Viajes() {
     setNuevoEstado("");
 
     // Buscamos el viaje actualizado en el array fresco
-    // Usamos un callback de setState para leer el valor más reciente del array
     setViajesActivos((prev) => {
       const actualizado = prev.find((v) => v.id === viajeSelec.id);
       if (actualizado) {
@@ -728,8 +720,8 @@ export default function Viajes() {
     setErrorEstado(null);
 
     const ahora = new Date().toISOString();
-    const updates: Record<string, string | null> = {
-      estado: "cancelado" as string,
+    const updates: Record<string, unknown> = {
+      estado: "cancelado",
       fecha_fin: ahora,
     };
 
@@ -864,6 +856,11 @@ export default function Viajes() {
       notas: fNotas.trim() || null,
       lat_destino: fDestinoLat ?? null,
       lng_destino: fDestinoLng ?? null,
+      bloqueado: false,
+      lecturas_fuera_destino: 0,
+      fecha_llegada_destino: null,
+      fecha_salida_destino: null,
+      deleted_at: null,
     };
 
     const { error } = await supabase.from("viajes").insert(payload);

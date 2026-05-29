@@ -3,7 +3,7 @@
 // ============================================================
 
 export type Rol = 'admin' | 'operativo' | 'visualizador'
-export type EstadoViaje = 'programado' | 'en_transito' | 'en_destino' | 'finalizado' | 'cancelado'
+export type EstadoViaje = 'programado' | 'en_transito' | 'en_destino' | 'de_vuelta' | 'finalizado' | 'cancelado'
 export type EstadoCabezal = 'activo' | 'en_viaje' | 'en_mantenimiento' | 'inactivo'
 export type EstadoChasis = 'disponible' | 'en_renta' | 'en_flete' | 'en_taller'
 export type TipoAlerta = 'inactividad_prolongada' | 'llegada_destino' | 'retraso_operativo' | 'finalizacion_viaje' | 'velocidad_excesiva' | 'otro'
@@ -73,6 +73,8 @@ export interface Viaje {
   fecha_inicio?: string
   fecha_estimada?: string
   fecha_fin?: string
+  fecha_llegada_destino?: string | null
+  fecha_salida_destino?: string | null
   duracion_real_min?: number
   piloto_id?: string
   cabezal_id?: string
@@ -83,6 +85,9 @@ export interface Viaje {
   tipo_renta_id?: string
   viatico_monto?: number
   notas?: string
+  bloqueado?: boolean
+  lecturas_fuera_destino?: number
+  deleted_at?: string | null
   piloto?: Piloto
   cabezal?: Cabezal
   chasis?: Chasis

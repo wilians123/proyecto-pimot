@@ -10,6 +10,7 @@ import Header from "@/components/layout/Header";
 import Dashboard from "@/modules/dashboard/components/Dashboard";
 import Viajes from "@/modules/viajes/components/Viajes";
 import Flota from "@/modules/flota/components/Flota";
+import Clientes from "@/modules/clientes/components/Clientes";
 import Pilotos from "@/modules/pilotos/components/Pilotos";
 import ModuloPlaceholder from "@/components/shared/ModuloPlaceholder";
 import AlertaBadge from "@/components/shared/AlertaBadge";
@@ -40,6 +41,8 @@ export default function AppShell() {
         return <Pilotos />;
       case "usuarios":
         return <Usuarios />;
+      case "clientes":
+        return <Clientes />;
 
       case "alertas":
         return (
