@@ -1,0 +1,15 @@
+﻿node.exe : PASS tests/e2e/geofence/harness/geofence.simulation.test.ts
+En línea: 1 Carácter: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS tests/e2e/...ulation.test.ts:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  Geofence ida + vuelta simulation
+    ÔêÜ runs ida then vuelta and validates transitions (3038 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        4.871 s
+Ran all test suites matching tests/e2e/geofence/harness/geofence.simulation.test.ts.
