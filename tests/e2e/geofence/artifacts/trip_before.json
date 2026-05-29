@@ -1,0 +1,8 @@
+{
+  "id": "sim-1",
+  "origin": "Puerto Barrios",
+  "destination": "Zacapa",
+  "unit_id": "unit-123",
+  "state": "programado",
+  "route_id": "route-sim"
+}
