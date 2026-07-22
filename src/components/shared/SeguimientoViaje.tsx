@@ -8,7 +8,11 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavixy } from "@/hooks/useNavixy";
 import { useGeofence } from "@/hooks/useGeofence";
-import { actualizarEstadoViaje, incrementarLecturasDestino } from "@/services/viajes.service";
+import {
+  actualizarEstadoViaje,
+  incrementarLecturasDestino,
+  incrementarLecturasInicio,
+} from "@/services/viajes.service";
 import type { EstadoViaje } from "@/types";
 
 const MapaFlota = dynamic(() => import("@/components/shared/MapaFlota"), {
@@ -23,12 +27,15 @@ const MapaFlota = dynamic(() => import("@/components/shared/MapaFlota"), {
 interface SeguimientoViajeProps {
   cabezalId: string | null;
   cabezalPlaca?: string | null;
+  origenLat?: number | null;
+  origenLng?: number | null;
   destinoLat?: number | null;
   destinoLng?: number | null;
   destinoNombre?: string | null;
   viajeId: string;
   estadoViaje: string;
   bloqueado: boolean;
+  lecturasInicioConfirm?: number;
   lecturasFueraDestino: number;
   onEstadoCambiado: () => void;
 }
@@ -36,20 +43,20 @@ interface SeguimientoViajeProps {
 export default function SeguimientoViaje({
   cabezalId,
   cabezalPlaca,
+  origenLat = null,
+  origenLng = null,
   destinoLat = null,
   destinoLng = null,
   destinoNombre = null,
   viajeId,
   estadoViaje,
   bloqueado,
+  lecturasInicioConfirm = 0,
   lecturasFueraDestino,
   onEstadoCambiado,
 }: SeguimientoViajeProps) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [procesandoTransicion, setProcesandoTransicion] = useState(false);
-
-  // Contador local de lecturas consecutivas fuera del radio de inicio.
-  const [lecturasInicioConfirm, setLecturasInicioConfirm] = useState(0);
 
   const { trackers, ultimaActualizacion } = useNavixy({
     intervalo: 15_000,
@@ -65,6 +72,8 @@ export default function SeguimientoViaje({
     trackerLat: datosTracker?.lat ?? null,
     trackerLng: datosTracker?.lng ?? null,
     estadoActual: estadoViaje,
+    origenLat,
+    origenLng,
     destinoLat,
     destinoLng,
     bloqueado,
@@ -111,6 +120,15 @@ export default function SeguimientoViaje({
     [viajeId, onEstadoCambiado, limpiarSafetyTimer],
   );
 
+  const incrementarContadorInicio = useCallback(async () => {
+    const { error } = await incrementarLecturasInicio(viajeId);
+    if (!error) {
+      onEstadoCambiado();
+    } else {
+      console.error("[SeguimientoViaje] Error incrementando contador de inicio:", error);
+    }
+  }, [viajeId, onEstadoCambiado]);
+
   // Incrementa el contador de lecturas fuera del destino
   const incrementarContadorDestino = useCallback(async () => {
     const { error } = await incrementarLecturasDestino(viajeId);
@@ -126,14 +144,19 @@ export default function SeguimientoViaje({
     if (!transicion || procesandoTransicion) return;
     if (trackers.length === 0) return;
 
-    const clave = `${estadoViaje}:${transicion}`;
+    const clave =
+      transicion === "confirmar_inicio"
+        ? `${estadoViaje}:${transicion}:${lecturasInicioConfirm}`
+        : transicion === "salida_destino"
+          ? `${estadoViaje}:${transicion}:${lecturasFueraDestino}`
+          : `${estadoViaje}:${transicion}`;
     if (transicionesEnviadasRef.current.has(clave)) return;
     transicionesEnviadasRef.current.add(clave);
 
     // Diferir la ejecución para evitar race conditions
     const t = setTimeout(() => {
-      if (transicion === "salida_inicio") {
-        setLecturasInicioConfirm((prev) => prev + 1);
+      if (transicion === "confirmar_inicio") {
+        incrementarContadorInicio();
       } else if (transicion === "salida_destino") {
         incrementarContadorDestino();
       } else {
@@ -146,20 +169,17 @@ export default function SeguimientoViaje({
     transicion,
     procesandoTransicion,
     estadoViaje,
+    lecturasInicioConfirm,
+    lecturasFueraDestino,
     trackers.length,
     ejecutarTransicion,
+    incrementarContadorInicio,
     incrementarContadorDestino,
   ]);
 
   // Limpiar el Set cuando cambia el estado del viaje
   useEffect(() => {
     transicionesEnviadasRef.current.clear();
-    if (estadoViaje !== "programado") {
-      const t = setTimeout(() => {
-        setLecturasInicioConfirm(0);
-      }, 0);
-      return () => clearTimeout(t);
-    }
   }, [estadoViaje]);
 
   // Limpiar timer de seguridad al desmontar

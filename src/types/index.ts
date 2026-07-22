@@ -86,6 +86,7 @@ export interface Viaje {
   viatico_monto?: number
   notas?: string
   bloqueado?: boolean
+  lecturas_inicio_confirm?: number
   lecturas_fuera_destino?: number
   deleted_at?: string | null
   piloto?: Piloto

@@ -1,31 +1,61 @@
-/** @jest-environment jsdom */
 import fs from "fs";
 import path from "path";
-import React from 'react';
-import { render, act } from '@testing-library/react';
-import { useGeofence } from "../../../../src/hooks/useGeofence";
+import {
+  evaluarGeofence,
+  GEOFENCE_CONFIG,
+  GEOFENCE_DEFAULT_ORIGIN,
+} from "../../../../src/lib/geofence";
+import type { EstadoViaje } from "../../../../src/types";
 
-// Constants must match useGeofence.ts
-const PUERTO_BARRIOS_LAT = 15.69455;
-const PUERTO_BARRIOS_LNG = -88.57833;
-const RADIO_INICIO_M = 150;
-const RADIO_LLEGADA_M = 75;
-const RADIO_SALIDA_M = 120;
-const RADIO_RETORNO_M = 150;
-const LECTURAS_PARA_INICIO = 2;
-const LECTURAS_PARA_SALIDA = 3;
+type Point = {
+  timestamp: string;
+  lat: number;
+  lng: number;
+};
 
-function saveArtifact(name: string, obj: any) {
+type EventLog = {
+  phase: "ida" | "vuelta";
+  index: number;
+  timestamp: string;
+  lat: number;
+  lng: number;
+  stateBefore: EstadoViaje;
+  stateAfter: EstadoViaje;
+  transicion: string | null;
+  distanciaDestinoM: number | null;
+  distanciaOrigenM: number | null;
+  lecturasInicioConfirm: number;
+  lecturasFueraDestino: number;
+};
+
+function saveArtifact(name: string, obj: unknown) {
   const dir = path.join(__dirname, "..", "artifacts");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, name),
-    typeof obj === "string" ? obj : JSON.stringify(obj, null, 2),
-  );
+  const body = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+  const target = path.join(dir, name);
+
+  try {
+    fs.writeFileSync(target, body);
+  } catch {
+    const parsed = path.parse(name);
+    fs.writeFileSync(path.join(dir, `${parsed.name}.latest${parsed.ext}`), body);
+  }
+}
+
+function applyTransition(state: EstadoViaje, transicion: string | null): EstadoViaje {
+  if (
+    transicion === "en_transito" ||
+    transicion === "en_destino" ||
+    transicion === "de_vuelta" ||
+    transicion === "finalizado"
+  ) {
+    return transicion;
+  }
+  return state;
 }
 
 describe("Geofence ida + vuelta simulation", () => {
-  test("runs ida then vuelta and validates transitions", async () => {
+  test("advances programado -> en_transito -> en_destino -> de_vuelta -> finalizado", () => {
     const base = path.join(__dirname, "..", "..", "data");
     const idaFile = path.join(base, "points_payloads.json");
     const vueltaFile = path.join(base, "points_payloads_return.json");
@@ -33,127 +63,107 @@ describe("Geofence ida + vuelta simulation", () => {
     const ida = JSON.parse(fs.readFileSync(idaFile, "utf8"));
     const vuelta = JSON.parse(fs.readFileSync(vueltaFile, "utf8"));
 
-    const events: any[] = [];
+    const trip = {
+      id: "sim-1",
+      state: "programado" as EstadoViaje,
+      lecturasInicioConfirm: 0,
+      lecturasFueraDestino: 0,
+    };
+    const events: EventLog[] = [];
 
-    const trip: any = { state: "programado" };
-
-    // helper to run through points
-    function runPoints(points: any[], phase: "ida" | "vuelta") {
-      let lecturasInicioConfirm = 0;
-      let lecturasFueraDestino = 0;
-      const logs: any[] = [];
-
-      let currentRes: any = null;
-      
-      function TestComp(props: any) {
-        const res = useGeofence(props as any);
-        React.useEffect(() => { currentRes = res; }, [res]);
-        return null;
-      }
-
+    function runPoints(points: Point[], phase: "ida" | "vuelta") {
       for (let i = 0; i < points.length; i++) {
         const p = points[i];
-        const props = {
+        const stateBefore = trip.state;
+        const res = evaluarGeofence({
           trackerLat: p.lat,
           trackerLng: p.lng,
           estadoActual: trip.state,
+          origenLat: ida.metadata.origin.lat,
+          origenLng: ida.metadata.origin.lng,
           destinoLat: ida.metadata.destination.lat,
           destinoLng: ida.metadata.destination.lng,
           bloqueado: false,
-          lecturasFueraDestino,
-          lecturasInicioConfirm,
-        };
+          lecturasInicioConfirm: trip.lecturasInicioConfirm,
+          lecturasFueraDestino: trip.lecturasFueraDestino,
+        });
 
-        // use @testing-library/react to mount and update
-        const TestComp = (props: any) => {
-          const r = useGeofence(props as any);
-          React.useEffect(() => { currentRes = r; }, [r]);
-          return null;
-        };
-
-        const rendered = render(React.createElement(TestComp, props));
-        const res = currentRes;
-
-
-        // update counters based on distances and state
-        if (trip.state === "programado") {
-          if (
-            res.distanciaPuertoBarriosM !== null &&
-            res.distanciaPuertoBarriosM > RADIO_INICIO_M
-          )
-            lecturasInicioConfirm++;
-          else lecturasInicioConfirm = 0;
+        if (res.transicion === "confirmar_inicio") {
+          trip.lecturasInicioConfirm++;
+        } else if (res.transicion === "salida_destino") {
+          trip.lecturasFueraDestino++;
+        } else if (res.transicion === "en_transito") {
+          trip.state = "en_transito";
+          trip.lecturasInicioConfirm = 0;
+        } else if (res.transicion === "en_destino") {
+          trip.state = "en_destino";
+          trip.lecturasFueraDestino = 0;
+        } else if (res.transicion === "de_vuelta") {
+          trip.state = "de_vuelta";
+          trip.lecturasFueraDestino = 0;
+        } else {
+          trip.state = applyTransition(trip.state, res.transicion);
         }
 
-        if (trip.state === "en_destino") {
-          if (
-            res.distanciaDestinoM !== null &&
-            res.distanciaDestinoM > RADIO_SALIDA_M
-          )
-            lecturasFueraDestino++;
-          else lecturasFueraDestino = 0;
-        }
-
-        // record event
-        logs.push({
+        events.push({
+          phase,
           index: i,
           timestamp: p.timestamp,
           lat: p.lat,
           lng: p.lng,
-          stateBefore: trip.state,
+          stateBefore,
+          stateAfter: trip.state,
           transicion: res.transicion,
           distanciaDestinoM: res.distanciaDestinoM,
-          distanciaPuertoBarriosM: res.distanciaPuertoBarriosM,
-          lecturasInicioConfirm,
-          lecturasFueraDestino,
+          distanciaOrigenM: res.distanciaOrigenM,
+          lecturasInicioConfirm: trip.lecturasInicioConfirm,
+          lecturasFueraDestino: trip.lecturasFueraDestino,
         });
-        events.push({ phase, ...logs[logs.length - 1] });
 
-        // apply transitions
-        if (res.transicion === "en_transito") trip.state = "en_transito";
-        if (res.transicion === "en_destino") trip.state = "en_destino";
-        if (res.transicion === "de_vuelta") trip.state = "de_vuelta";
-        if (res.transicion === "finalizado") trip.state = "finalizado";
-
-        // unmount this render to avoid DOM buildup
-        rendered.unmount();
-
-        // stop early if finalized during vuelta
         if (phase === "vuelta" && trip.state === "finalizado") break;
       }
-
-      return logs;
     }
 
-    // run ida
-    const idaLogs = runPoints(ida.points, "ida");
-    // assertions after ida: must have reached en_destino
-    expect(
-      trip.state === "en_destino" ||
-        trip.state === "de_vuelta" ||
-        trip.state === "finalizado" ||
-        trip.state === "en_transito",
-    ).toBeTruthy();
+    runPoints(ida.points, "ida");
+    runPoints(vuelta.points, "vuelta");
 
-    // run vuelta
-    const vueltaLogs = runPoints(vuelta.points, "vuelta");
+    const cambios = events.filter((event) => event.stateBefore !== event.stateAfter);
+    const flujo = cambios.map((event) => event.stateAfter);
 
-    // after vuelta, expect de_vuelta then finalizado
-    expect(trip.state).toBe("finalizado");
-
-    // write artifacts
     saveArtifact("events_return.json", events);
     saveArtifact("trip_return.json", trip);
     saveArtifact(
       "report_return.md",
-      `Transitions report\n\nIDA logs: ${idaLogs.length} ticks\nVUELTA logs: ${vueltaLogs.length} ticks\nFinal state: ${trip.state}`,
+      [
+        "# Geofence E2E Simulation Report",
+        "",
+        `Config: inicio ${GEOFENCE_CONFIG.radioInicioM}m, llegada ${GEOFENCE_CONFIG.radioLlegadaM}m, salida ${GEOFENCE_CONFIG.radioSalidaM}m, retorno ${GEOFENCE_CONFIG.radioRetornoM}m.`,
+        `Origen usado: ${GEOFENCE_DEFAULT_ORIGIN.lat}, ${GEOFENCE_DEFAULT_ORIGIN.lng}.`,
+        "",
+        "| fase | index | estado anterior | estado nuevo | transicion | distancia origen m | distancia destino m |",
+        "| --- | ---: | --- | --- | --- | ---: | ---: |",
+        ...cambios.map((event) =>
+          [
+            event.phase,
+            event.index,
+            event.stateBefore,
+            event.stateAfter,
+            event.transicion,
+            Math.round(event.distanciaOrigenM ?? -1),
+            Math.round(event.distanciaDestinoM ?? -1),
+          ].join(" | "),
+        ),
+        "",
+        `Final state: ${trip.state}`,
+      ].join("\n"),
     );
 
-    // simple snapshots
-    expect(
-      fs.existsSync(
-        path.join(__dirname, "..", "artifacts", "events_return.json"),
-      ),
-    ).toBeTruthy();
+    expect(flujo).toEqual([
+      "en_transito",
+      "en_destino",
+      "de_vuelta",
+      "finalizado",
+    ]);
+    expect(trip.state).toBe("finalizado");
   }, 300000);
 });

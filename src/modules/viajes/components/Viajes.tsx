@@ -654,6 +654,7 @@ export default function Viajes() {
     if (estadoDestino === "en_transito") {
       updates.fecha_inicio = ahora;
       updates.bloqueado = true;
+      updates.lecturas_inicio_confirm = 0;
     }
     if (estadoDestino === "en_destino") {
       updates.fecha_llegada_destino = ahora;
@@ -804,6 +805,8 @@ export default function Viajes() {
         fecha_inicio: fFechaInicio || null,
         fecha_estimada: fFechaEst || null,
         notas: fNotas.trim() || null,
+        lat_origen: null,
+        lng_origen: null,
         lat_destino: fDestinoLat ?? null,
         lng_destino: fDestinoLng ?? null,
       };
@@ -854,9 +857,12 @@ export default function Viajes() {
       fecha_inicio: fFechaInicio || null,
       fecha_estimada: fFechaEst || null,
       notas: fNotas.trim() || null,
+      lat_origen: null,
+      lng_origen: null,
       lat_destino: fDestinoLat ?? null,
       lng_destino: fDestinoLng ?? null,
       bloqueado: false,
+      lecturas_inicio_confirm: 0,
       lecturas_fuera_destino: 0,
       fecha_llegada_destino: null,
       fecha_salida_destino: null,
@@ -1248,6 +1254,12 @@ export default function Viajes() {
                       <SeguimientoViaje
                         cabezalId={viajeSelec.cabezal_id}
                         cabezalPlaca={viajeSelec.cabezal?.placa}
+                        origenLat={
+                          (viajeSelec.lat_origen as number | null) ?? null
+                        }
+                        origenLng={
+                          (viajeSelec.lng_origen as number | null) ?? null
+                        }
                         destinoLat={
                           (viajeSelec.lat_destino as number | null) ?? null
                         }
@@ -1277,6 +1289,13 @@ export default function Viajes() {
                               lecturas_fuera_destino?: number;
                             }
                           ).lecturas_fuera_destino ?? 0
+                        }
+                        lecturasInicioConfirm={
+                          (
+                            viajeSelec as ViajeCompleto & {
+                              lecturas_inicio_confirm?: number;
+                            }
+                          ).lecturas_inicio_confirm ?? 0
                         }
                         onEstadoCambiado={refetchActivos}
                       />

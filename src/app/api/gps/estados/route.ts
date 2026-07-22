@@ -13,6 +13,7 @@
 // =============================================================
 
 import { NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase-server";
 
 // Tipos del response de Navixy
 interface NavixyGpsLocation {
@@ -62,9 +63,26 @@ export async function GET(): Promise<NextResponse> {
   // IDs de los trackers registrados (en producción vienen de la BD)
   // Hardcodeados como fallback seguro; la ruta /api/gps/trackers
   // los puede leer dinámicamente de navixy_trackers en Supabase.
-  const trackerIds = [10457452, 10457453];
+  let trackerIds: number[] = [];
 
   try {
+    const { data: trackersMeta, error: trackersError } = await supabaseAdmin
+      .from("navixy_trackers")
+      .select("tracker_id")
+      .eq("activo", true);
+
+    if (trackersError) {
+      return NextResponse.json(
+        { error: trackersError.message },
+        { status: 500 },
+      );
+    }
+
+    trackerIds = (trackersMeta ?? []).map((tracker) => tracker.tracker_id);
+    if (trackerIds.length === 0) {
+      return NextResponse.json({ estados: [] });
+    }
+
     const res = await fetch(`${NAVIXY_BASE}/tracker/get_states`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

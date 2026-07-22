@@ -234,6 +234,7 @@ export interface Database {
           notas: string | null;
           creado_por: string | null;
           bloqueado: boolean;
+          lecturas_inicio_confirm: number;
           lecturas_fuera_destino: number;
           deleted_at: string | null;
           created_at: string;
@@ -266,6 +267,7 @@ export interface Database {
           notas?: string | null;
           creado_por?: string | null;
           bloqueado?: boolean;
+          lecturas_inicio_confirm?: number;
           lecturas_fuera_destino?: number;
           deleted_at?: string | null;
           created_at?: string;
@@ -297,6 +299,7 @@ export interface Database {
           notas?: string | null;
           creado_por?: string | null;
           bloqueado?: boolean;
+          lecturas_inicio_confirm?: number;
           lecturas_fuera_destino?: number;
           deleted_at?: string | null;
           updated_at?: string;

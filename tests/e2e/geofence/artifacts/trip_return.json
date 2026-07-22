@@ -1,3 +1,6 @@
 {
-  "state": "finalizado"
+  "id": "sim-1",
+  "state": "finalizado",
+  "lecturasInicioConfirm": 0,
+  "lecturasFueraDestino": 0
 }
