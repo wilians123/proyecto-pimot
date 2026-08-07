@@ -100,7 +100,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xl md:text-2xl font-bold text-slate-800">
-            Buenos días, José
+            Buenas tardes, Willians
           </h3>
           <p className="text-slate-500 text-sm mt-0.5">
             Hoy hay{" "}
@@ -108,13 +108,6 @@ export default function Dashboard() {
               5 operaciones activas
             </span>
           </p>
-        </div>
-        <div
-          className="hidden sm:flex items-center gap-2 text-xs text-slate-500
-          bg-white border border-slate-200 px-3 py-2 rounded-xl"
-        >
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-          <span>Sistema operando normalmente</span>
         </div>
       </div>
 
