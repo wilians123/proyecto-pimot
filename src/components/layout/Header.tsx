@@ -11,16 +11,19 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { icons, ALERTAS_MUESTRA, ALERTA_CONFIG } from '@/lib/constants'
+import { icons, ALERTA_CONFIG } from '@/lib/constants'
+import { useAlertas } from '@/hooks/useAlertas'
+import { alertaAResumen } from '@/utils/alertaView'
 import type { HeaderProps } from '@/types/ui'
 
 export default function Header({
   titulo,
-  alertasCount,
   onToggleMobile,
   onToggleNotifications,
   notificationsOpen,
 }: HeaderProps) {
+  const { alertas } = useAlertas(true)
+  const alertasCount = alertas.length
   const panelRef = useRef<HTMLDivElement>(null)
   const btnRef   = useRef<HTMLButtonElement>(null)
 
@@ -59,9 +62,6 @@ export default function Header({
           <h2 className="text-lg md:text-xl font-bold text-slate-800 leading-tight truncate">
             {titulo}
           </h2>
-          <p className="text-xs text-slate-400 hidden sm:block">
-            Actualizado hace 2 minutos
-          </p>
         </div>
       </div>
 
@@ -90,7 +90,7 @@ export default function Header({
           >
             {icons.bell}
             {alertasCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-4.5 h-4.5 bg-red-500 text-white
+              <span className="absolute -top-0.5 -right-0.5 min-w-4.5 h-4.5 bg-red-600 text-white
                 text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow">
                 {alertasCount > 9 ? '9+' : alertasCount}
               </span>
@@ -109,7 +109,7 @@ export default function Header({
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-slate-800">Alertas activas</span>
                   {alertasCount > 0 && (
-                    <span className="text-xs font-bold bg-red-500 text-white px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-bold bg-red-600 text-white px-2 py-0.5 rounded-full">
                       {alertasCount}
                     </span>
                   )}
@@ -124,7 +124,7 @@ export default function Header({
 
               {/* Lista de alertas */}
               <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-                {ALERTAS_MUESTRA.length === 0 ? (
+                {alertas.length === 0 ? (
                   <div className="py-10 text-center">
                     <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
                       <span className="text-green-500 text-xl">{icons.check}</span>
@@ -133,7 +133,8 @@ export default function Header({
                     <p className="text-xs text-slate-400 mt-1">Todo funciona correctamente</p>
                   </div>
                 ) : (
-                  ALERTAS_MUESTRA.map((alerta) => {
+                  alertas.map((alerta) => {
+                    const alertaVista = alertaAResumen(alerta)
                     const cfg = ALERTA_CONFIG[alerta.nivel]
                     return (
                       <div
@@ -146,12 +147,12 @@ export default function Header({
                             <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${cfg.labelBg} ${cfg.labelText}`}>
                               {alerta.nivel}
                             </span>
-                            <span className="text-xs text-slate-400">{alerta.tiempo}</span>
+                            <span className="text-xs text-slate-400">{alertaVista.tiempo}</span>
                           </div>
                           <p className={`text-sm font-medium leading-snug ${cfg.text}`}>
-                            {alerta.mensaje}
+                            {alertaVista.mensaje}
                           </p>
-                          <p className="text-xs text-slate-400 mt-0.5 font-mono">{alerta.viaje}</p>
+                          <p className="text-xs text-slate-400 mt-0.5 font-mono">{alertaVista.viaje}</p>
                         </div>
                       </div>
                     )

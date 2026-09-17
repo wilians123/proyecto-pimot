@@ -336,7 +336,7 @@ export default function SeguimientoViaje({
             </p>
             <div className="flex items-center gap-1.5">
               <span
-                className={`w-2 h-2 rounded-full ${datosTracker.encendido ? "bg-green-500" : "bg-red-400"}`}
+                className={`w-2 h-2 rounded-full ${datosTracker.encendido ? "bg-green-500" : "bg-red-600"}`}
               />
               <p
                 className={`text-sm font-bold ${datosTracker.encendido ? "text-green-700" : "text-red-600"}`}
@@ -357,7 +357,7 @@ export default function SeguimientoViaje({
                 </p>
                 <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${datosTracker.bateria > 50 ? "bg-green-500" : datosTracker.bateria > 20 ? "bg-amber-500" : "bg-red-500"}`}
+                    className={`h-full rounded-full transition-all ${datosTracker.bateria > 50 ? "bg-green-500" : datosTracker.bateria > 20 ? "bg-amber-500" : "bg-red-600"}`}
                     style={{ width: `${datosTracker.bateria}%` }}
                   />
                 </div>

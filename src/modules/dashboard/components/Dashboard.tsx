@@ -7,7 +7,41 @@
 import dynamic from "next/dynamic";
 import AlertaBadge from "@/components/shared/AlertaBadge";
 import Badge from "@/components/shared/Badge";
-import { VIAJES_MUESTRA, ALERTAS_MUESTRA, icons } from "@/lib/constants";
+import { icons } from "@/lib/constants";
+import { useViajes } from "@/hooks/useViajes";
+import { useAlertas } from "@/hooks/useAlertas";
+import { useStats } from "@/hooks/useStats";
+import { useDashboardOperationalStats } from "@/hooks/useDashboardOperationalStats";
+import { alertaAResumen } from "@/utils/alertaView";
+import { useAuth } from "@/context/AuthContext";
+
+function formatHora(fecha: string | null) {
+  if (!fecha) return "—";
+  const date = new Date(fecha);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("es-GT", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatDuracion(minutos: number | null | undefined) {
+  if (!minutos) return "—";
+  const horas = Math.floor(minutos / 60);
+  const minutosRestantes = Math.round(minutos % 60);
+  return horas > 0 ? `${horas}h ${minutosRestantes}m` : `${minutosRestantes}m`;
+}
+
+function saludoPorHora() {
+  const hora = new Date().getHours();
+  if (hora < 12) return "Buenos días";
+  if (hora < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+function iniciales(nombre: string) {
+  return nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((parte) => parte[0]).join("").toUpperCase() || "U";
+}
 
 // CRÍTICO: Leaflet usa `window` y `document` directamente.
 // Si se importa en SSR, Next.js lanza "window is not defined".
@@ -94,18 +128,30 @@ const IconAlert = () => (
 );
 
 export default function Dashboard() {
+  const { profile } = useAuth();
+  const { viajes, loading: viajesLoading } = useViajes();
+  const { alertas: alertasActivas, loading: alertasLoading } = useAlertas(true);
+  const { stats, loading: statsLoading } = useStats();
+  const { stats: operationalStats, loading: operationalLoading } = useDashboardOperationalStats();
+  const viajesActivos = viajes.filter((viaje) => viaje.estado !== "finalizado");
+  const nombreUsuario = profile?.nombre?.trim() || "Usuario";
+  const pilotoDestacado = operationalStats.pilotoDestacado;
+  const disponibles = operationalStats.cabezales.activo + operationalStats.chasis.disponible;
+  const enViaje = operationalStats.cabezales.en_viaje + operationalStats.chasis.en_flete + operationalStats.chasis.en_renta;
+  const enTaller = operationalStats.cabezales.en_mantenimiento + operationalStats.chasis.en_taller;
+
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-2xl mx-auto">
       {/* ── Saludo ── */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xl md:text-2xl font-bold text-slate-800">
-            Buenas tardes, Willians
+            {saludoPorHora()}, {nombreUsuario}
           </h3>
           <p className="text-slate-500 text-sm mt-0.5">
             Hoy hay{" "}
             <span className="font-semibold text-blue-600">
-              5 operaciones activas
+              {viajesActivos.length} operaciones activas
             </span>
           </p>
         </div>
@@ -123,10 +169,10 @@ export default function Dashboard() {
               Activos
             </p>
             <p className="text-3xl font-black text-blue-600 tabular-nums leading-none mt-1">
-              5
+              {statsLoading ? "—" : stats?.en_transito ?? 0}
             </p>
             <p className="text-xs text-slate-400 mt-1 hidden sm:block">
-              3 en ruta · 2 en destino
+              {statsLoading ? "Cargando…" : `${stats?.en_transito ?? viajesActivos.length} en tránsito`}
             </p>
           </div>
         </div>
@@ -140,7 +186,7 @@ export default function Dashboard() {
               Programados
             </p>
             <p className="text-3xl font-black text-slate-700 tabular-nums leading-none mt-1">
-              8
+              {statsLoading ? "—" : stats?.programados ?? 0}
             </p>
             <p className="text-xs text-slate-400 mt-1 hidden sm:block">
               Próximo: 15:00 hrs
@@ -157,10 +203,10 @@ export default function Dashboard() {
               Finalizados
             </p>
             <p className="text-3xl font-black text-green-600 tabular-nums leading-none mt-1">
-              12
+              {statsLoading ? "—" : stats?.finalizados ?? 0}
             </p>
             <p className="text-xs text-slate-400 mt-1 hidden sm:block">
-              Promedio: 4.8h/viaje
+              Promedio: {formatDuracion(stats?.dur_prom_min)}
             </p>
           </div>
         </div>
@@ -170,14 +216,14 @@ export default function Dashboard() {
         >
           <IconAlert />
           <div>
-            <p className="text-xs font-semibold text-red-500 uppercase tracking-wider">
+            <p className="text-xs font-semibold text-red-600 uppercase tracking-wider">
               Alertas
             </p>
             <p className="text-3xl font-black text-red-600 tabular-nums leading-none mt-1">
-              2
+              {alertasActivas.length}
             </p>
-            <p className="text-xs text-red-400 mt-1 hidden sm:block">
-              1 crítica · 1 aviso
+            <p className="text-xs text-red-600 mt-1 hidden sm:block">
+              {alertasActivas.length} activas
             </p>
           </div>
         </div>
@@ -225,14 +271,27 @@ export default function Dashboard() {
                 Alertas Recientes
               </h3>
             </div>
-            <span className="text-xs font-bold bg-red-500 text-white px-2 py-0.5 rounded-full">
-              2 activas
+            <span className="text-xs font-bold bg-red-600 text-white px-2 py-0.5 rounded-full">
+              {alertasActivas.length} activas
             </span>
           </div>
           <div className="flex-1 p-4 space-y-2.5 overflow-y-auto">
-            {ALERTAS_MUESTRA.map((a) => (
-              <AlertaBadge key={a.id} alerta={a} />
-            ))}
+            {alertasLoading ? (
+              <p className="text-sm text-slate-400 text-center py-6">
+                Cargando alertas…
+              </p>
+            ) : alertasActivas.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-6">
+                Sin alertas activas
+              </p>
+            ) : (
+              alertasActivas.map((alerta) => (
+                <AlertaBadge
+                  key={alerta.id}
+                  alerta={alertaAResumen(alerta)}
+                />
+              ))
+            )}
           </div>
           <div className="px-4 py-3 border-t border-slate-100">
             <button
@@ -257,7 +316,7 @@ export default function Dashboard() {
             className="text-xs text-blue-700 bg-blue-50 font-medium
             px-2.5 py-1 rounded-full border border-blue-200"
           >
-            5 operaciones activas
+            {viajesActivos.length} operaciones activas
           </span>
         </div>
 
@@ -283,14 +342,20 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {VIAJES_MUESTRA.filter((v) => v.estado !== "finalizado").map(
-                (v) => (
+              {viajesLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-6 text-center text-slate-400">
+                    Cargando viajes…
+                  </td>
+                </tr>
+              ) : (
+                viajesActivos.map((v) => (
                   <tr
                     key={v.id}
                     className="border-b border-slate-50 hover:bg-orange-50/30 transition-colors cursor-pointer"
                   >
                     <td className="px-5 py-3.5 font-mono text-xs text-slate-500 font-medium">
-                      {v.id}
+                      {v.codigo ?? v.id.slice(0, 8)}
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
@@ -298,10 +363,10 @@ export default function Dashboard() {
                           className="w-7 h-7 bg-slate-200 rounded-full flex items-center
                         justify-center text-xs font-bold text-slate-600 shrink-0"
                         >
-                          {v.piloto.charAt(0)}
+                          {(v.piloto?.nombre ?? "Sin piloto").charAt(0)}
                         </div>
                         <span className="font-semibold text-slate-800 text-sm">
-                          {v.piloto}
+                          {v.piloto?.nombre ?? "Sin piloto"}
                         </span>
                       </div>
                     </td>
@@ -314,10 +379,10 @@ export default function Dashboard() {
                       <Badge estado={v.estado} />
                     </td>
                     <td className="px-5 py-3.5 text-slate-600 tabular-nums font-medium">
-                      {v.estimado}
+                      {formatHora(v.fecha_estimada)}
                     </td>
                   </tr>
-                ),
+                ))
               )}
             </tbody>
           </table>
@@ -325,16 +390,22 @@ export default function Dashboard() {
 
         {/* Móvil: tarjetas */}
         <div className="md:hidden divide-y divide-slate-100">
-          {VIAJES_MUESTRA.filter((v) => v.estado !== "finalizado").map((v) => (
+          {viajesLoading ? (
+            <p className="px-4 py-6 text-sm text-center text-slate-400">
+              Cargando viajes…
+            </p>
+          ) : viajesActivos.map((v) => (
             <div
               key={v.id}
               className="px-4 py-3.5 hover:bg-slate-50 cursor-pointer"
             >
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div>
-                  <p className="font-bold text-slate-800">{v.piloto}</p>
+                  <p className="font-bold text-slate-800">
+                    {v.piloto?.nombre ?? "Sin piloto"}
+                  </p>
                   <p className="text-xs font-mono text-slate-400 mt-0.5">
-                    {v.id}
+                    {v.codigo ?? v.id.slice(0, 8)}
                   </p>
                 </div>
                 <Badge estado={v.estado} />
@@ -344,7 +415,9 @@ export default function Dashboard() {
                 <span className="text-slate-400 mx-1 font-bold">→</span>
                 {v.destino}
               </p>
-              <p className="text-xs text-slate-400 mt-1">Est. {v.estimado}</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Est. {formatHora(v.fecha_estimada)}
+              </p>
             </div>
           ))}
         </div>
@@ -357,12 +430,14 @@ export default function Dashboard() {
             <h4 className="text-sm font-bold text-slate-700">
               Cumplimiento de Tiempos
             </h4>
-            <span className="text-lg font-black text-green-600">87%</span>
+            <span className="text-lg font-black text-green-600">
+              {statsLoading ? "—" : `${stats?.cumplimiento ?? 0}%`}
+            </span>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
             <div
               className="bg-linear-to-r from-green-400 to-green-600 h-3 rounded-full"
-              style={{ width: "87%" }}
+              style={{ width: `${stats?.cumplimiento ?? 0}%` }}
             />
           </div>
           <div className="flex justify-between mt-2">
@@ -380,19 +455,19 @@ export default function Dashboard() {
           <div className="grid grid-cols-3 gap-2">
             {[
               {
-                n: 4,
+                n: operationalLoading ? "—" : disponibles,
                 label: "Disponibles",
                 color: "text-green-600",
                 bg: "bg-green-50 border-green-200",
               },
               {
-                n: 2,
+                n: operationalLoading ? "—" : enViaje,
                 label: "En viaje",
                 color: "text-blue-600",
                 bg: "bg-blue-50 border-blue-200",
               },
               {
-                n: 1,
+                n: operationalLoading ? "—" : enTaller,
                 label: "En taller",
                 color: "text-amber-600",
                 bg: "bg-amber-50 border-amber-200",
@@ -420,21 +495,21 @@ export default function Dashboard() {
               className="w-11 h-11 bg-linear-to-br from-orange-400 to-orange-600 rounded-full
               flex items-center justify-center text-base font-black text-white shadow-md shrink-0"
             >
-              CR
+              {pilotoDestacado ? iniciales(pilotoDestacado.nombre) : "—"}
             </div>
             <div>
-              <p className="font-bold text-slate-800">Carlos Ramírez</p>
+              <p className="font-bold text-slate-800">{pilotoDestacado?.nombre ?? "Sin datos"}</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                14 viajes este mes
+                {operationalLoading ? "Cargando…" : `${pilotoDestacado?.viajes ?? 0} viajes últimos 30 días`}
               </p>
               <div className="flex items-center gap-1.5 mt-1">
                 <div className="flex-1 bg-slate-100 rounded-full h-1.5 w-20">
                   <div
                     className="bg-orange-500 h-1.5 rounded-full"
-                    style={{ width: "94%" }}
+                    style={{ width: pilotoDestacado ? "100%" : "0%" }}
                   />
                 </div>
-                <span className="text-xs font-bold text-orange-600">94%</span>
+                <span className="text-xs font-bold text-orange-600">{pilotoDestacado ? "100%" : "—"}</span>
               </div>
             </div>
           </div>

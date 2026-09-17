@@ -90,6 +90,24 @@ const OPCIONES_ESTADO_CHASIS: Array<{
     optionText: 'text-emerald-700',
   },
   {
+    value: 'en_renta',
+    label: 'En renta',
+    bg: 'bg-purple-50',
+    text: 'text-purple-700',
+    dot: 'bg-purple-500',
+    optionBg: 'bg-purple-50 hover:bg-purple-100',
+    optionText: 'text-purple-700',
+  },
+  {
+    value: 'en_flete',
+    label: 'En flete',
+    bg: 'bg-blue-50',
+    text: 'text-blue-700',
+    dot: 'bg-blue-500',
+    optionBg: 'bg-blue-50 hover:bg-blue-100',
+    optionText: 'text-blue-700',
+  },
+  {
     value: 'en_taller',
     label: 'En taller',
     bg: 'bg-orange-50',
@@ -457,6 +475,21 @@ export default function Flota() {
       await supabase.from('cabezales').update(update).eq('id', id)
       await refetchCabezales()
     } else {
+      if (valor === 'en_renta') {
+        const { count, error } = await supabase
+          .from('rentas_chasis')
+          .select('id', { count: 'exact', head: true })
+          .eq('chasis_id', id)
+          .eq('estado', 'activa')
+        if (error || (count ?? 0) > 0) {
+          setSaveError(error
+            ? `No se pudo validar la renta activa: ${error.message}`
+            : 'Este chasis ya tiene una renta activa. Ciérrala o cancélala desde Renta de Chasis.')
+          setEditing(null)
+          setActionBusy(false)
+          return
+        }
+      }
       const update: ChasisUpdate = { estado: valor as EstadoChasisDB }
       await supabase.from('chasis').update(update).eq('id', id)
       await refetchChasis()
@@ -768,6 +801,11 @@ export default function Flota() {
   // ─────────────────────────────────────────────────────────────
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-2xl mx-auto">
+      {saveError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          {saveError}
+        </div>
+      )}
 
       {/* ── Tabs centrados ── */}
       <div className="flex justify-center">

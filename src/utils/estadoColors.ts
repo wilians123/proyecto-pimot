@@ -9,13 +9,13 @@ export const ESTADO_VIAJE_CONFIG: Record<EstadoViaje, { label: string; color: st
   en_destino:  { label: 'En Destino',  color: 'bg-amber-50 text-amber-700',    dot: 'bg-amber-500'  },
   de_vuelta:   { label: 'De Vuelta',   color: 'bg-purple-50 text-purple-700',  dot: 'bg-purple-500' },
   finalizado:  { label: 'Finalizado',  color: 'bg-green-50 text-green-700',    dot: 'bg-green-500'  },
-  cancelado:   { label: 'Cancelado',   color: 'bg-red-50 text-red-600',        dot: 'bg-red-400'    },
+  cancelado:   { label: 'Cancelado',   color: 'bg-red-50 text-red-600',        dot: 'bg-red-600'    },
 }
 
 export const NIVEL_ALERTA_CONFIG: Record<NivelAlerta, { label: string; color: string; icon: string }> = {
   info:         { label: 'Info',        color: 'bg-blue-50 text-blue-700 border-blue-200',     icon: 'ℹ️' },
   advertencia:  { label: 'Advertencia', color: 'bg-amber-50 text-amber-700 border-amber-200',  icon: '⚠️' },
-  critico:      { label: 'Crítico',     color: 'bg-red-50 text-red-700 border-red-200',        icon: '🚨' },
+  critico:      { label: 'Crítico',     color: 'bg-red-50 text-red-600 border-red-200',        icon: '🚨' },
 }
 
 export const ESTADO_CABEZAL_CONFIG: Record<EstadoCabezal, { label: string; color: string }> = {

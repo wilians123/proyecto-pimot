@@ -3,69 +3,13 @@
 
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useClientes } from "@/hooks/useClientes";
+import { useViajes } from "@/hooks/useViajes";
 
 type TabId = "lista" | "ingresos" | "registrar";
 type TipoCliente = "directo" | "indirecto";
-
-interface ClienteUI {
-  id: string;
-  nombre: string;
-  tipo: TipoCliente;
-  telefono: string | null;
-  correo: string | null;
-  direccion: string | null;
-  activo: boolean;
-}
-
-// Datos de muestra — se reemplazarán con Supabase
-const CLIENTES_MOCK: ClienteUI[] = [
-  {
-    id: "1",
-    nombre: "Importaciones del Norte S.A.",
-    tipo: "directo",
-    telefono: "2345-6789",
-    correo: "contacto@importnorte.gt",
-    direccion: "Zona Industrial, Guatemala",
-    activo: true,
-  },
-  {
-    id: "2",
-    nombre: "Distribuidora Central",
-    tipo: "directo",
-    telefono: "4567-8901",
-    correo: "info@distrisentral.gt",
-    direccion: "Puerto Barrios, Izabal",
-    activo: true,
-  },
-  {
-    id: "3",
-    nombre: "Agencia Marítima Barrios",
-    tipo: "indirecto",
-    telefono: "3456-7890",
-    correo: "ops@agenciabarrios.gt",
-    direccion: "Santo Tomás de Castilla",
-    activo: true,
-  },
-  {
-    id: "4",
-    nombre: "Comercial Escuintla Ltda.",
-    tipo: "indirecto",
-    telefono: "5678-9012",
-    correo: null,
-    direccion: "Escuintla, Guatemala",
-    activo: false,
-  },
-  {
-    id: "5",
-    nombre: "Exportaciones Pacífico",
-    tipo: "directo",
-    telefono: "6789-0123",
-    correo: "ventas@expacifico.gt",
-    direccion: "Calzada Roosevelt, Zona 11",
-    activo: true,
-  },
-];
 
 interface IngresoClienteUI {
   cliente_id: string;
@@ -74,62 +18,9 @@ interface IngresoClienteUI {
   fletes: number;
   rentas: number;
   total_servicios: number;
-  total_ingresos: number;
+  total_ingresos: number | null;
   ultimo_servicio: string | null;
 }
-
-const INGRESOS_MOCK: IngresoClienteUI[] = [
-  {
-    cliente_id: "1",
-    cliente_nombre: "Importaciones del Norte S.A.",
-    tipo: "directo",
-    fletes: 18,
-    rentas: 4,
-    total_servicios: 22,
-    total_ingresos: 58400,
-    ultimo_servicio: "Hoy",
-  },
-  {
-    cliente_id: "2",
-    cliente_nombre: "Distribuidora Central",
-    tipo: "directo",
-    fletes: 12,
-    rentas: 6,
-    total_servicios: 18,
-    total_ingresos: 42800,
-    ultimo_servicio: "Ayer",
-  },
-  {
-    cliente_id: "3",
-    cliente_nombre: "Agencia Marítima Barrios",
-    tipo: "indirecto",
-    fletes: 9,
-    rentas: 2,
-    total_servicios: 11,
-    total_ingresos: 27200,
-    ultimo_servicio: "Hace 3 días",
-  },
-  {
-    cliente_id: "5",
-    cliente_nombre: "Exportaciones Pacífico",
-    tipo: "directo",
-    fletes: 6,
-    rentas: 0,
-    total_servicios: 6,
-    total_ingresos: 14400,
-    ultimo_servicio: "Hace 1 semana",
-  },
-  {
-    cliente_id: "4",
-    cliente_nombre: "Comercial Escuintla Ltda.",
-    tipo: "indirecto",
-    fletes: 3,
-    rentas: 1,
-    total_servicios: 4,
-    total_ingresos: 8600,
-    ultimo_servicio: "Hace 1 mes",
-  },
-];
 
 const TIPO_CONFIG: Record<
   TipoCliente,
@@ -210,26 +101,130 @@ function IconoClientes({ size = 28 }: { size?: number }) {
 }
 
 export default function Clientes() {
+  const { clientes, loading, error, refetch } = useClientes();
+  const { viajes } = useViajes();
   const [tab, setTab] = useState<TabId>("lista");
 
   // Estado de acciones inline (visual, sin lógica aún)
   const [accionId, setAccionId] = useState<string | null>(null);
   const [detalleId, setDetalleId] = useState<string | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
 
-  // Formulario — visual únicamente
+  // Formulario
+  const [fNombre, setFNombre] = useState("");
   const [fTipo, setFTipo] = useState<TipoCliente>("directo");
+  const [fTelefono, setFTelefono] = useState("");
+  const [fCorreo, setFCorreo] = useState("");
+  const [fDireccion, setFDireccion] = useState("");
 
-  const formatMoneda = (n: number) =>
-    `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`;
+  const ingresos = useMemo<IngresoClienteUI[]>(
+    () =>
+      clientes.map((cliente) => {
+        const viajesCliente = viajes.filter(
+          (viaje) => viaje.cliente_id === cliente.id,
+        );
+        const ultimo = [...viajesCliente].sort((a, b) =>
+          b.created_at.localeCompare(a.created_at),
+        )[0];
+        return {
+          cliente_id: cliente.id,
+          cliente_nombre: cliente.nombre,
+          tipo: cliente.tipo,
+          fletes: viajesCliente.filter((viaje) => viaje.tipo_servicio === "flete").length,
+          rentas: viajesCliente.filter((viaje) => viaje.tipo_servicio === "renta").length,
+          total_servicios: viajesCliente.length,
+          total_ingresos: null,
+          ultimo_servicio: ultimo?.created_at ?? null,
+        };
+      }),
+    [clientes, viajes],
+  );
+
+  const formatMoneda = (n: number | null) =>
+    n === null
+      ? "—"
+      : `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`;
+
+  function resetForm() {
+    setEditandoId(null);
+    setFNombre("");
+    setFTipo("directo");
+    setFTelefono("");
+    setFCorreo("");
+    setFDireccion("");
+  }
+
+  function iniciarEdicion(cliente: (typeof clientes)[number]) {
+    setEditandoId(cliente.id);
+    setFNombre(cliente.nombre);
+    setFTipo(cliente.tipo);
+    setFTelefono(cliente.telefono ?? "");
+    setFCorreo(cliente.correo ?? "");
+    setFDireccion(cliente.direccion ?? "");
+    setMensaje(null);
+    setTab("registrar");
+  }
+
+  async function handleGuardarCliente() {
+    if (!fNombre.trim()) {
+      setMensaje("El nombre del cliente es obligatorio.");
+      return;
+    }
+
+    setGuardando(true);
+    setMensaje(null);
+    const payload = {
+      nombre: fNombre.trim(),
+      tipo: fTipo,
+      telefono: fTelefono.trim() || null,
+      correo: fCorreo.trim() || null,
+      direccion: fDireccion.trim() || null,
+    };
+
+    const result = editandoId
+      ? await supabase.from("clientes").update(payload).eq("id", editandoId)
+      : await supabase.from("clientes").insert(payload);
+
+    setGuardando(false);
+    if (result.error) {
+      setMensaje(result.error.message);
+      return;
+    }
+
+    await refetch();
+    resetForm();
+    setMensaje(null);
+    setTab("lista");
+  }
+
+  async function handleToggleActivo(cliente: (typeof clientes)[number]) {
+    setAccionId(null);
+    const { error: updateError } = await supabase
+      .from("clientes")
+      .update({ activo: !cliente.activo })
+      .eq("id", cliente.id);
+    if (updateError) {
+      setMensaje(updateError.message);
+      return;
+    }
+    await refetch();
+  }
 
   const TABS = [
-    { id: "lista" as TabId, label: "Clientes", count: CLIENTES_MOCK.length },
+    { id: "lista" as TabId, label: "Clientes", count: clientes.length },
     { id: "ingresos" as TabId, label: "Ingresos" },
     { id: "registrar" as TabId, label: "+ Registrar cliente" },
   ];
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-2xl mx-auto">
+      {(loading || error) && (
+        <p className={`text-sm ${error ? "text-red-600" : "text-slate-400"}`}>
+          {error ?? "Cargando clientes…"}
+        </p>
+      )}
       {/* ── Tabs centrados ── */}
       <div className="flex justify-center">
         <div
@@ -276,22 +271,22 @@ export default function Clientes() {
             {[
               {
                 label: "Total clientes",
-                valor: CLIENTES_MOCK.length,
+                valor: clientes.length,
                 color: "text-slate-800",
               },
               {
                 label: "Activos",
-                valor: CLIENTES_MOCK.filter((c) => c.activo).length,
+                valor: clientes.filter((c) => c.activo).length,
                 color: "text-green-700",
               },
               {
                 label: "Directos",
-                valor: CLIENTES_MOCK.filter((c) => c.tipo === "directo").length,
+                valor: clientes.filter((c) => c.tipo === "directo").length,
                 color: "text-blue-700",
               },
               {
                 label: "Indirectos",
-                valor: CLIENTES_MOCK.filter((c) => c.tipo === "indirecto")
+                valor: clientes.filter((c) => c.tipo === "indirecto")
                   .length,
                 color: "text-slate-600",
               },
@@ -318,8 +313,8 @@ export default function Clientes() {
               </div>
               <h3 className="font-bold text-slate-800">Clientes registrados</h3>
               <span className="ml-auto text-xs text-slate-400">
-                {CLIENTES_MOCK.filter((c) => c.activo).length} activos de{" "}
-                {CLIENTES_MOCK.length}
+                {clientes.filter((c) => c.activo).length} activos de{" "}
+                {clientes.length}
               </span>
             </div>
 
@@ -346,7 +341,7 @@ export default function Clientes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {CLIENTES_MOCK.map((c) => {
+                  {clientes.map((c) => {
                     const isAction = accionId === c.id;
                     return (
                       <tr
@@ -412,8 +407,8 @@ export default function Clientes() {
                               <span className="text-xs text-slate-500 font-medium mr-1">
                                 {c.activo ? "¿Desactivar?" : "¿Activar?"}
                               </span>
-                              <button
-                                onClick={() => setAccionId(null)}
+                               <button
+                                 onClick={() => handleToggleActivo(c)}
                                 className={`px-3 py-1.5 text-white text-xs font-bold rounded-lg
                                   transition-colors cursor-pointer
                                   ${c.activo ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}
@@ -430,8 +425,17 @@ export default function Clientes() {
                               </button>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2">
-                              {/* Ver ingresos */}
+                             <div className="flex items-center gap-2">
+                               <button
+                                 onClick={() => iniciarEdicion(c)}
+                                 className="flex items-center gap-1.5 px-3 py-1.5 border
+                                   border-slate-200 text-slate-700 text-xs font-semibold rounded-lg
+                                   hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700
+                                   transition-colors cursor-pointer"
+                               >
+                                 Editar
+                               </button>
+                               {/* Ver ingresos */}
                               <button
                                 onClick={() => {
                                   setTab("ingresos");
@@ -522,7 +526,7 @@ export default function Clientes() {
 
           {/* Móvil: cards */}
           <div className="md:hidden space-y-3">
-            {CLIENTES_MOCK.map((c) => (
+            {clientes.map((c) => (
               <div
                 key={c.id}
                 className="bg-white rounded-2xl border border-slate-200 p-4"
@@ -581,7 +585,7 @@ export default function Clientes() {
                     Ver ingresos
                   </button>
                   <button
-                    onClick={() => setAccionId(accionId === c.id ? null : c.id)}
+                    onClick={() => handleToggleActivo(c)}
                     className={`flex-1 py-2 text-xs font-semibold rounded-xl border
                       transition-colors cursor-pointer
                       ${
@@ -602,7 +606,7 @@ export default function Clientes() {
       {/* ══════════════ TAB: INGRESOS ══════════════ */}
       {tab === "ingresos" && (
         <div className="space-y-4">
-          {/* Aviso funcionalidad en desarrollo */}
+          {/* Información derivada de los viajes reales */}
           <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <svg
               viewBox="0 0 20 20"
@@ -618,11 +622,10 @@ export default function Clientes() {
               <line x1="10" y1="14" x2="10.01" y2="14" />
             </svg>
             <p className="text-sm text-blue-800">
-              <span className="font-bold">
-                Vista preliminar con datos de muestra.
-              </span>{" "}
-              Los ingresos reales se calcularán desde Supabase en la siguiente
-              fase de desarrollo.
+                <span className="font-bold">Datos reales de viajes.</span>{" "}
+                Los servicios se calculan desde la tabla de viajes. La tabla
+                actual no contiene un importe de ingreso por servicio, por eso
+                ese total se muestra como no disponible.
             </p>
           </div>
 
@@ -632,24 +635,24 @@ export default function Clientes() {
               {
                 label: "Total ingresos",
                 valor: formatMoneda(
-                  INGRESOS_MOCK.reduce((a, r) => a + r.total_ingresos, 0),
+                  ingresos.reduce((a, r) => a + (r.total_ingresos ?? 0), 0),
                 ),
                 color: "text-green-700",
               },
               {
                 label: "Fletes facturados",
-                valor: String(INGRESOS_MOCK.reduce((a, r) => a + r.fletes, 0)),
+                valor: String(ingresos.reduce((a, r) => a + r.fletes, 0)),
                 color: "text-blue-700",
               },
               {
                 label: "Rentas facturadas",
-                valor: String(INGRESOS_MOCK.reduce((a, r) => a + r.rentas, 0)),
+                valor: String(ingresos.reduce((a, r) => a + r.rentas, 0)),
                 color: "text-purple-700",
               },
               {
                 label: "Servicios totales",
                 valor: String(
-                  INGRESOS_MOCK.reduce((a, r) => a + r.total_servicios, 0),
+                  ingresos.reduce((a, r) => a + r.total_servicios, 0),
                 ),
                 color: "text-slate-800",
               },
@@ -701,8 +704,8 @@ export default function Clientes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {INGRESOS_MOCK.sort(
-                    (a, b) => b.total_ingresos - a.total_ingresos,
+                  {[...ingresos].sort(
+                    (a, b) => (b.total_ingresos ?? 0) - (a.total_ingresos ?? 0),
                   ).map((r, i) => (
                     <tr
                       key={r.cliente_id}
@@ -782,17 +785,17 @@ export default function Clientes() {
                       Total general
                     </td>
                     <td className="px-4 py-3 font-bold text-blue-700 tabular-nums text-center">
-                      {INGRESOS_MOCK.reduce((a, r) => a + r.fletes, 0)}
+                      {ingresos.reduce((a, r) => a + r.fletes, 0)}
                     </td>
                     <td className="px-4 py-3 font-bold text-purple-700 tabular-nums text-center">
-                      {INGRESOS_MOCK.reduce((a, r) => a + r.rentas, 0)}
+                      {ingresos.reduce((a, r) => a + r.rentas, 0)}
                     </td>
                     <td className="px-4 py-3 font-bold text-slate-700 tabular-nums text-center">
-                      {INGRESOS_MOCK.reduce((a, r) => a + r.total_servicios, 0)}
+                      {ingresos.reduce((a, r) => a + r.total_servicios, 0)}
                     </td>
                     <td className="px-4 py-3 font-black text-green-700 tabular-nums text-lg">
                       {formatMoneda(
-                        INGRESOS_MOCK.reduce((a, r) => a + r.total_ingresos, 0),
+                        ingresos.reduce((a, r) => a + (r.total_ingresos ?? 0), 0),
                       )}
                     </td>
                     <td colSpan={2} />
@@ -804,8 +807,8 @@ export default function Clientes() {
 
           {/* Móvil: cards de ingresos */}
           <div className="md:hidden space-y-3">
-            {INGRESOS_MOCK.sort(
-              (a, b) => b.total_ingresos - a.total_ingresos,
+            {[...ingresos].sort(
+              (a, b) => (b.total_ingresos ?? 0) - (a.total_ingresos ?? 0),
             ).map((r, i) => (
               <div
                 key={r.cliente_id}
@@ -867,8 +870,8 @@ export default function Clientes() {
         <div className="w-full">
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
             <div className="bg-linear-to-r from-slate-800 to-slate-900 px-6 md:px-8 py-5">
-              <h3 className="font-bold text-white text-xl">
-                Registrar Cliente
+                <h3 className="font-bold text-white text-xl">
+                {editandoId ? "Editar Cliente" : "Registrar Cliente"}
               </h3>
               <p className="text-slate-400 text-sm mt-1">
                 El cliente quedará disponible para asociar a fletes y rentas
@@ -894,6 +897,8 @@ export default function Clientes() {
                   <Field label="Nombre o razón social" required>
                     <input
                       type="text"
+                      value={fNombre}
+                      onChange={(event) => setFNombre(event.target.value)}
                       placeholder="Ej. Importaciones del Norte S.A."
                       className={inputCls}
                     />
@@ -955,6 +960,8 @@ export default function Clientes() {
                   <Field label="Número de teléfono">
                     <input
                       type="tel"
+                      value={fTelefono}
+                      onChange={(event) => setFTelefono(event.target.value)}
                       placeholder="Ej. 2345-6789"
                       className={inputCls}
                     />
@@ -962,6 +969,8 @@ export default function Clientes() {
                   <Field label="Correo electrónico">
                     <input
                       type="email"
+                      value={fCorreo}
+                      onChange={(event) => setFCorreo(event.target.value)}
                       placeholder="contacto@empresa.gt"
                       className={inputCls}
                     />
@@ -970,6 +979,8 @@ export default function Clientes() {
                     <Field label="Dirección">
                       <input
                         type="text"
+                        value={fDireccion}
+                        onChange={(event) => setFDireccion(event.target.value)}
                         placeholder="Ej. Zona Industrial, Guatemala"
                         className={inputCls}
                       />
@@ -994,9 +1005,9 @@ export default function Clientes() {
                   <line x1="10" y1="15" x2="10.01" y2="15" />
                 </svg>
                 <p className="text-sm text-amber-800">
-                  <span className="font-bold">Interfaz visual lista.</span> La
-                  conexión con Supabase y el guardado real se implementarán en
-                  la siguiente fase.
+                  <span className="font-bold">
+                    {mensaje ?? "Los cambios se guardarán en Supabase."}
+                  </span>
                 </p>
               </div>
 
@@ -1004,9 +1015,10 @@ export default function Clientes() {
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  disabled
-                  className="flex-1 py-3.5 bg-orange-300 text-white text-base rounded-xl
-                    font-bold cursor-not-allowed flex items-center justify-center gap-2"
+                  onClick={handleGuardarCliente}
+                  disabled={guardando}
+                  className="flex-1 py-3.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-base rounded-xl
+                    font-bold transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <svg
                     viewBox="0 0 16 16"
@@ -1020,11 +1032,11 @@ export default function Clientes() {
                     <line x1="8" y1="2" x2="8" y2="14" />
                     <line x1="2" y1="8" x2="14" y2="8" />
                   </svg>
-                  Guardar cliente
+                  {guardando ? "Guardando…" : editandoId ? "Guardar cambios" : "Guardar cliente"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setTab("lista")}
+                   onClick={() => { resetForm(); setTab("lista"); }}
                   className="sm:w-44 py-3.5 border-2 border-slate-200 text-slate-700 rounded-xl
                     font-semibold hover:bg-slate-100 transition-colors cursor-pointer text-base"
                 >

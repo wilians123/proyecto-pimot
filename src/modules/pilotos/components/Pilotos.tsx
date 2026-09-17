@@ -696,8 +696,8 @@ export default function Pilotos() {
                               },
                               cancelado: {
                                 bg: "bg-red-100",
-                                text: "text-red-700",
-                                dot: "bg-red-400",
+                                text: "text-red-600",
+                                dot: "bg-red-600",
                               },
                             } as Record<
                               string,

@@ -3,14 +3,18 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/types/database";
 
 type ViajeRow = Database["public"]["Tables"]["viajes"]["Row"];
+type PilotoRow = Database["public"]["Tables"]["pilotos"]["Row"];
+type CabezalRow = Database["public"]["Tables"]["cabezales"]["Row"];
+type ChasisRow = Database["public"]["Tables"]["chasis"]["Row"];
+type ClienteRow = Database["public"]["Tables"]["clientes"]["Row"];
 type EstadoViaje = ViajeRow["estado"];
 
 // Viaje enriquecido con joins opcionales
-interface ViajeConRelaciones extends ViajeRow {
-  piloto?: Record<string, unknown> | null;
-  cabezal?: Record<string, unknown> | null;
-  chasis?: Record<string, unknown> | null;
-  cliente?: Record<string, unknown> | null;
+export interface ViajeConRelaciones extends ViajeRow {
+  piloto?: PilotoRow | null;
+  cabezal?: CabezalRow | null;
+  chasis?: ChasisRow | null;
+  cliente?: ClienteRow | null;
 }
 
 export function useViajes(filtroEstado?: EstadoViaje) {

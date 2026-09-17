@@ -12,7 +12,7 @@ export default function KpiCard({
   tendencia,
 }: KpiCardProps) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-2">
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col gap-2">
       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{titulo}</p>
       <div className="flex items-end justify-between">
         <span className={`text-3xl font-semibold tabular-nums ${color}`}>{valor}</span>

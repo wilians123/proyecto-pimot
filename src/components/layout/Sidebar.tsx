@@ -13,6 +13,7 @@
 "use client";
 
 import { icons, NAV_ITEMS } from "@/lib/constants";
+import { useAuth } from "@/context/AuthContext";
 import type { SidebarProps } from "@/types/ui";
 
 export default function Sidebar({
@@ -23,6 +24,27 @@ export default function Sidebar({
   mobileOpen,
   setMobileOpen,
 }: SidebarProps) {
+  const { profile, signOut } = useAuth();
+  const nombre = profile?.nombre?.trim() || "Usuario";
+  const rol = profile
+    ? ({
+        admin: "Administrador",
+        operativo: "Operativo",
+        visualizador: "Visualizador",
+      } as const)[profile.rol]
+    : "Usuario";
+  const iniciales = nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0])
+    .join("")
+    .toUpperCase() || "U";
+
+  async function handleSignOut() {
+    await signOut();
+  }
+
   function handleNav(id: typeof modulo) {
     setModulo(id);
     setMobileOpen(false);
@@ -143,32 +165,79 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* ── Footer: solo perfil ── */}
+      {/* ── Footer: perfil y cierre de sesión ── */}
       <div className="border-t border-slate-800 shrink-0 overflow-hidden">
         {!collapsed ? (
-          <div className="flex items-center gap-2.5 px-3 py-3">
-            <div
-              className="w-8 h-8 bg-linear-to-br from-orange-400 to-orange-600 rounded-full
-              flex items-center justify-center text-xs font-bold shrink-0 shadow"
+          <div className="px-3 py-3 space-y-2">
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-8 h-8 bg-linear-to-br from-orange-400 to-orange-600 rounded-full
+                flex items-center justify-center text-xs font-bold shrink-0 shadow"
+              >
+                {iniciales}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-white truncate">{nombre}</p>
+                <p className="text-[11px] text-slate-400">{rol}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold
+                text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors
+                cursor-pointer"
+              aria-label="Cerrar sesión"
             >
-              JA
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">
-                Willians Administrador
-              </p>
-              <p className="text-[11px] text-slate-400">Administrador</p>
-            </div>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4 shrink-0"
+                aria-hidden="true"
+              >
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+                <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
+              </svg>
+              Cerrar sesión
+            </button>
           </div>
         ) : (
-          /* Avatar centrado cuando está colapsado */
-          <div className="flex justify-center py-3">
+          <div className="flex flex-col items-center gap-2 py-3">
             <div
               className="w-8 h-8 bg-linear-to-br from-orange-400 to-orange-600 rounded-full
               flex items-center justify-center text-xs font-bold shadow"
+              title={`${nombre} · ${rol}`}
             >
-              JA
+              {iniciales}
             </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg
+                transition-colors cursor-pointer"
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4"
+                aria-hidden="true"
+              >
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+                <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
+              </svg>
+            </button>
           </div>
         )}
       </div>
@@ -235,21 +304,43 @@ export default function Sidebar({
               </nav>
 
               {/* Footer del drawer */}
-              <div className="border-t border-slate-800 px-3 py-3 shrink-0">
+              <div className="border-t border-slate-800 px-3 py-3 shrink-0 space-y-2">
                 <div className="flex items-center gap-2.5">
                   <div
                     className="w-8 h-8 bg-linear-to-br from-orange-400 to-orange-600 rounded-full
                     flex items-center justify-center text-xs font-bold shadow"
                   >
-                    JA
+                    {iniciales}
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-white">
-                      Willians Administrador
-                    </p>
-                    <p className="text-[11px] text-slate-400">Administrador</p>
+                    <p className="text-xs font-semibold text-white truncate">{nombre}</p>
+                    <p className="text-[11px] text-slate-400">{rol}</p>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold
+                    text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors
+                    cursor-pointer"
+                  aria-label="Cerrar sesión"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-4 h-4 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M10 17l5-5-5-5" />
+                    <path d="M15 12H3" />
+                    <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
+                  </svg>
+                  Cerrar sesión
+                </button>
               </div>
             </aside>
           </div>

@@ -1,3 +1,1 @@
-// Módulo: alertas
-// Exporta los componentes públicos del módulo
-export {}
+export { default } from "./components/Alertas";

@@ -4,7 +4,7 @@ import type { Database } from '@/types/database'
 
 type AlertaRow = Database['public']['Tables']['alertas']['Row']
 
-interface AlertaConViaje extends AlertaRow {
+export interface AlertaConViaje extends AlertaRow {
   viaje?: { codigo: string | null; origen: string; destino: string } | null
 }
 

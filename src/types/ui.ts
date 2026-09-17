@@ -18,7 +18,8 @@ export type ModuloId =
   | "flota"
   | "pilotos"
   | "usuarios"
-  | "clientes";
+  | "clientes"
+  | "renta-chasis";
 
 // ── Tipos de flota ────────────────────────────────────────────
 export type TipoEquipo = "cabezal" | "chasis";
@@ -65,7 +66,7 @@ export interface ViajeResumen {
 }
 
 export interface AlertaResumen {
-  id: number;
+  id: string | number;
   tipo: string;
   nivel: NivelAlertaUI;
   mensaje: string;
@@ -104,7 +105,6 @@ export interface SidebarProps {
 
 export interface HeaderProps {
   titulo: string;
-  alertasCount: number;
   onToggleMobile: () => void;
   onToggleNotifications: () => void;
   notificationsOpen: boolean;

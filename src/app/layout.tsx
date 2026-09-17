@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
-import { AppProvider }  from '@/context/AppContext'
 
 export const metadata: Metadata = {
   title:       'PIMOT — Monitoreo de Transporte',
@@ -12,15 +11,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <body>
-        {/*
-          AuthProvider inicializa la sesión de Supabase
-          y la expone a toda la app vía useAuth().
-          Despues AppProvider gestiona el estado de UI (sidebar, módulo activo).
-        */}
+        {/* AuthProvider inicializa la sesión de Supabase y la expone a toda la app. */}
         <AuthProvider>
-          <AppProvider>
-            {children}
-          </AppProvider>
+          {children}
         </AuthProvider>
       </body>
     </html>

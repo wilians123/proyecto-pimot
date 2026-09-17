@@ -2,8 +2,6 @@ import type {
   EstadoViajeUI,
   NivelAlertaUI,
   ModuloId,
-  ViajeResumen,
-  AlertaResumen,
   EstadoCabezal,
   EstadoChasisUI,
 } from "@/types/ui";
@@ -271,8 +269,8 @@ export const ESTADO_CONFIG: Record<
   cancelado: {
     label: "Cancelado",
     bg: "bg-red-100",
-    text: "text-red-700",
-    dot: "bg-red-400",
+    text: "text-red-600",
+    dot: "bg-red-600",
   },
 };
 
@@ -306,11 +304,11 @@ export const ALERTA_CONFIG: Record<
   },
   critico: {
     bg: "bg-red-50",
-    text: "text-red-800",
-    border: "border-red-300",
+    text: "text-red-600",
+    border: "border-red-200",
     icon: "🚨",
     labelBg: "bg-red-100",
-    labelText: "text-red-800",
+    labelText: "text-red-600",
   },
 };
 
@@ -389,6 +387,7 @@ export const NAV_ITEMS: Array<{
   { id: "flota", label: "Gestión de Flota", icon: icons.flota },
   { id: "pilotos", label: "Pilotos y Viáticos", icon: icons.pilot },
   { id: "clientes", label: "Clientes", icon: icons.clientes },
+  { id: "renta-chasis", label: "Renta de Chasis", icon: icons.truck },
   { id: "usuarios", label: "Usuarios y Seguridad", icon: icons.security },
 ];
 
@@ -402,75 +401,5 @@ export const MODULO_HEADERS: Record<ModuloId, string> = {
   pilotos: "Pilotos y Viáticos",
   usuarios: "Usuarios y Seguridad",
   clientes: "Gestión de Clientes",
+  "renta-chasis": "Renta de Chasis",
 };
-
-// ─── Datos de muestra ─────────────────────────────────────────
-export const VIAJES_MUESTRA: ViajeResumen[] = [
-  {
-    id: "VJ-2026-0042",
-    piloto: "Carlos Ramírez",
-    origen: "Puerto Barrios",
-    destino: "Ciudad de Guatemala",
-    estado: "en_transito",
-    inicio: "08:30",
-    estimado: "14:00",
-    cabezal: "P-123ABC",
-  },
-  {
-    id: "VJ-2026-0041",
-    piloto: "Miguel Torres",
-    origen: "Santo Tomás de Castilla",
-    destino: "Escuintla",
-    estado: "en_destino",
-    inicio: "06:15",
-    estimado: "11:30",
-    cabezal: "P-456DEF",
-  },
-  {
-    id: "VJ-2026-0040",
-    piloto: "Juan García",
-    origen: "Ciudad de Guatemala",
-    destino: "Zacapa",
-    estado: "programado",
-    inicio: "15:00",
-    estimado: "19:30",
-    cabezal: "P-789GHI",
-  },
-  {
-    id: "VJ-2026-0039",
-    piloto: "Roberto Méndez",
-    origen: "Cobán",
-    destino: "Puerto Barrios",
-    estado: "finalizado",
-    inicio: "05:00",
-    estimado: "09:00",
-    cabezal: "P-321JKL",
-  },
-];
-
-export const ALERTAS_MUESTRA: AlertaResumen[] = [
-  {
-    id: 1,
-    tipo: "inactividad_prolongada",
-    nivel: "advertencia",
-    mensaje: "Vehículo P-123ABC sin movimiento por 35 minutos",
-    viaje: "VJ-2026-0042",
-    tiempo: "hace 5 min",
-  },
-  {
-    id: 2,
-    tipo: "retraso_operativo",
-    nivel: "critico",
-    mensaje: "Viaje VJ-2026-0041 excede tiempo estimado por 25 min",
-    viaje: "VJ-2026-0041",
-    tiempo: "hace 12 min",
-  },
-  {
-    id: 3,
-    tipo: "llegada_destino",
-    nivel: "info",
-    mensaje: "P-456DEF llegó al área de destino en Escuintla",
-    viaje: "VJ-2026-0041",
-    tiempo: "hace 18 min",
-  },
-];

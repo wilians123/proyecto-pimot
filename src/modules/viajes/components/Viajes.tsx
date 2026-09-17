@@ -90,8 +90,8 @@ const ESTADO_VIAJE_CONFIG: Record<
   cancelado: {
     label: "Cancelado",
     bg: "bg-red-100",
-    text: "text-red-700",
-    dot: "bg-red-400",
+    text: "text-red-600",
+    dot: "bg-red-600",
   },
   de_vuelta: {
     label: "De Vuelta",
@@ -1432,7 +1432,7 @@ export default function Viajes() {
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/50">
+                      <tr className="border-b border-slate-100">
                         {[
                           "Código",
                           "Piloto",

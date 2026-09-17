@@ -29,6 +29,8 @@ export type EstadoAlertaDB = "pendiente" | "enviada" | "vista" | "resuelta";
 export type RolUsuarioDB = "admin" | "operativo" | "visualizador";
 export type TipoServicioViajeDB = "flete" | "renta";
 export type TipoClienteDB = "directo" | "indirecto";
+export type ModalidadRentaDB = "por_viaje" | "mensual" | "por_dia";
+export type EstadoRentaChasisDB = "activa" | "cerrada" | "cancelada";
 
 export interface Database {
   public: {
@@ -457,6 +459,112 @@ export interface Database {
             columns: ["cabezal_id"];
             isOneToOne: false;
             referencedRelation: "cabezales";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+
+      tipos_renta: {
+        Row: {
+          id: string;
+          nombre: string;
+          modalidad: ModalidadRentaDB;
+          precio_base: number;
+          dias_incluidos: number;
+          precio_dia_extra: number;
+          activo: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          nombre: string;
+          modalidad: ModalidadRentaDB;
+          precio_base: number;
+          dias_incluidos?: number;
+          precio_dia_extra?: number;
+          activo?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          nombre?: string;
+          modalidad?: ModalidadRentaDB;
+          precio_base?: number;
+          dias_incluidos?: number;
+          precio_dia_extra?: number;
+          activo?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      rentas_chasis: {
+        Row: {
+          id: string;
+          chasis_id: string;
+          cliente_id: string;
+          tipo_renta_id: string;
+          fecha_inicio: string;
+          fecha_fin: string | null;
+          dias_extra: number;
+          costo_total: number;
+          estado: EstadoRentaChasisDB;
+          notas: string | null;
+          creado_por: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          chasis_id: string;
+          cliente_id: string;
+          tipo_renta_id: string;
+          fecha_inicio: string;
+          fecha_fin?: string | null;
+          dias_extra?: number;
+          costo_total: number;
+          estado?: EstadoRentaChasisDB;
+          notas?: string | null;
+          creado_por?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          fecha_fin?: string | null;
+          dias_extra?: number;
+          costo_total?: number;
+          estado?: EstadoRentaChasisDB;
+          notas?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rentas_chasis_chasis_id_fkey";
+            columns: ["chasis_id"];
+            isOneToOne: false;
+            referencedRelation: "chasis";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rentas_chasis_cliente_id_fkey";
+            columns: ["cliente_id"];
+            isOneToOne: false;
+            referencedRelation: "clientes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rentas_chasis_tipo_renta_id_fkey";
+            columns: ["tipo_renta_id"];
+            isOneToOne: false;
+            referencedRelation: "tipos_renta";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rentas_chasis_creado_por_fkey";
+            columns: ["creado_por"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];

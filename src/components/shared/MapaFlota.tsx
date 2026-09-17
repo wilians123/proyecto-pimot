@@ -665,7 +665,7 @@ export default function MapaFlota({
             justify-center gap-3 z-1000 px-6 text-center"
           >
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-              <span className="text-red-500 text-xl">⚠</span>
+              <span className="text-red-600 text-xl">⚠</span>
             </div>
             <p className="text-sm font-semibold text-slate-700">
               Sin conexión GPS

@@ -4,12 +4,12 @@
 
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 type TabId = "usuarios" | "roles" | "invitar";
 type Rol = "admin" | "operativo" | "visualizador";
 
-// ── Datos de muestra (se reemplazarán con Supabase Auth) ──────
 interface UsuarioUI {
   id: string;
   nombre: string;
@@ -19,45 +19,6 @@ interface UsuarioUI {
   ultimaSesion: string | null;
   avatar: string;
 }
-
-const USUARIOS_MOCK: UsuarioUI[] = [
-  {
-    id: "1",
-    nombre: "José Administrador",
-    email: "admin@empresa.gt",
-    rol: "admin",
-    activo: true,
-    ultimaSesion: "Hoy, 09:14",
-    avatar: "JA",
-  },
-  {
-    id: "2",
-    nombre: "María López",
-    email: "mlopez@empresa.gt",
-    rol: "operativo",
-    activo: true,
-    ultimaSesion: "Ayer, 16:42",
-    avatar: "ML",
-  },
-  {
-    id: "3",
-    nombre: "Carlos Méndez",
-    email: "cmendez@empresa.gt",
-    rol: "operativo",
-    activo: true,
-    ultimaSesion: "Hace 2 días",
-    avatar: "CM",
-  },
-  {
-    id: "4",
-    nombre: "Ana García",
-    email: "agarcia@empresa.gt",
-    rol: "visualizador",
-    activo: false,
-    ultimaSesion: "Hace 15 días",
-    avatar: "AG",
-  },
-];
 
 // ── Configuración visual de roles ─────────────────────────────
 const ROL_CONFIG: Record<
@@ -252,22 +213,193 @@ function CeldaPermiso({ valor }: { valor: boolean | "parcial" }) {
   );
 }
 
+function iniciales(nombre: string) {
+  return (
+    nombre
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((parte) => parte[0])
+      .join("")
+      .toUpperCase() || "U"
+  );
+}
+
+function formatoUltimaSesion(fecha: string | null) {
+  if (!fecha) return null;
+  const date = new Date(fecha);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("es-GT", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
 // ── Componente principal ──────────────────────────────────────
 export default function Usuarios() {
+  const [usuarios, setUsuarios] = useState<UsuarioUI[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [mensaje, setMensaje] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>("usuarios");
 
   // Estado visual de acciones (sin lógica real aún)
   const [accionId, setAccionId] = useState<string | null>(null);
   const [editandoRol, setEditRol] = useState<string | null>(null);
+  const [editRolValue, setEditRolValue] = useState<Rol>("operativo");
+  const [guardando, setGuardando] = useState(false);
+  const [fNombre, setFNombre] = useState("");
+  const [fEmail, setFEmail] = useState("");
+  const [fPassword, setFPassword] = useState("");
+  const [fRol, setFRol] = useState<Rol>("operativo");
+
+  const cargarUsuarios = useCallback(async () => {
+    setLoading(true);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const { data: perfiles, error: perfilesError } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (perfilesError) {
+      setError(perfilesError.message);
+      setLoading(false);
+      return;
+    }
+
+    const authResponse = session
+      ? await fetch("/api/usuarios", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+      : null;
+    const authData = authResponse?.ok
+      ? ((await authResponse.json()) as {
+          users: Array<{
+            id: string;
+            email: string | null;
+            last_sign_in_at: string | null;
+          }>;
+        })
+      : { users: [] };
+    const authPorId = new Map(authData.users.map((user) => [user.id, user]));
+
+    setUsuarios(
+      perfiles.map((perfil) => {
+        const authUser = authPorId.get(perfil.id);
+        return {
+          id: perfil.id,
+          nombre: perfil.nombre,
+          email: authUser?.email ?? "—",
+          rol: perfil.rol,
+          activo: perfil.activo,
+          ultimaSesion: formatoUltimaSesion(authUser?.last_sign_in_at ?? null),
+          avatar: iniciales(perfil.nombre),
+        };
+      }),
+    );
+    setError(null);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    async function fetchUsuarios() {
+      await cargarUsuarios();
+    }
+    fetchUsuarios();
+  }, [cargarUsuarios]);
+
+  async function guardarRol(id: string) {
+    setGuardando(true);
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ rol: editRolValue })
+      .eq("id", id);
+    setGuardando(false);
+    if (updateError) {
+      setMensaje(updateError.message);
+      return;
+    }
+    setEditRol(null);
+    setMensaje(null);
+    await cargarUsuarios();
+  }
+
+  async function cambiarEstado(usuario: UsuarioUI) {
+    setAccionId(null);
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ activo: !usuario.activo })
+      .eq("id", usuario.id);
+    if (updateError) {
+      setMensaje(updateError.message);
+      return;
+    }
+    await cargarUsuarios();
+  }
+
+  async function invitarUsuario() {
+    if (!fNombre.trim() || !fEmail.trim() || fPassword.length < 8) {
+      setMensaje("Completa nombre, correo y una contraseña de al menos 8 caracteres.");
+      return;
+    }
+
+    setGuardando(true);
+    setMensaje(null);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
+      setGuardando(false);
+      setMensaje("La sesión actual no es válida.");
+      return;
+    }
+
+    const response = await fetch("/api/usuarios", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        nombre: fNombre,
+        email: fEmail,
+        password: fPassword,
+        rol: fRol,
+      }),
+    });
+    const result = (await response.json()) as { error?: string };
+    setGuardando(false);
+    if (!response.ok) {
+      setMensaje(result.error ?? "No se pudo crear el usuario.");
+      return;
+    }
+
+    setFNombre("");
+    setFEmail("");
+    setFPassword("");
+    setFRol("operativo");
+    setMensaje(null);
+    setTab("usuarios");
+    await cargarUsuarios();
+  }
 
   const TABS = [
-    { id: "usuarios" as TabId, label: "Usuarios", count: USUARIOS_MOCK.length },
+    { id: "usuarios" as TabId, label: "Usuarios", count: usuarios.length },
     { id: "roles" as TabId, label: "Roles y Permisos" },
     { id: "invitar" as TabId, label: "+ Invitar usuario" },
   ];
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-2xl mx-auto">
+      {(loading || error || mensaje) && (
+        <p className={`text-sm ${error || mensaje ? "text-red-600" : "text-slate-400"}`}>
+          {error ?? mensaje ?? "Cargando usuarios…"}
+        </p>
+      )}
       {/* ── Tabs centrados ── */}
       <div className="flex justify-center">
         <div
@@ -314,22 +446,22 @@ export default function Usuarios() {
             {[
               {
                 label: "Total usuarios",
-                valor: USUARIOS_MOCK.length,
+                valor: usuarios.length,
                 color: "text-slate-800",
               },
               {
                 label: "Activos",
-                valor: USUARIOS_MOCK.filter((u) => u.activo).length,
+                valor: usuarios.filter((u) => u.activo).length,
                 color: "text-green-700",
               },
               {
                 label: "Administradores",
-                valor: USUARIOS_MOCK.filter((u) => u.rol === "admin").length,
+                valor: usuarios.filter((u) => u.rol === "admin").length,
                 color: "text-purple-700",
               },
               {
                 label: "Operativos",
-                valor: USUARIOS_MOCK.filter((u) => u.rol === "operativo")
+                valor: usuarios.filter((u) => u.rol === "operativo")
                   .length,
                 color: "text-blue-700",
               },
@@ -366,8 +498,8 @@ export default function Usuarios() {
               </div>
               <h3 className="font-bold text-slate-800">Usuarios del sistema</h3>
               <span className="ml-auto text-xs text-slate-400">
-                {USUARIOS_MOCK.filter((u) => u.activo).length} activos de{" "}
-                {USUARIOS_MOCK.length}
+                {usuarios.filter((u) => u.activo).length} activos de{" "}
+                {usuarios.length}
               </span>
             </div>
 
@@ -394,7 +526,7 @@ export default function Usuarios() {
                   </tr>
                 </thead>
                 <tbody>
-                  {USUARIOS_MOCK.map((u) => {
+                  {usuarios.map((u) => {
                     const rolCfg = ROL_CONFIG[u.rol];
                     const isAction = accionId === u.id;
                     const isEditRol = editandoRol === u.id;
@@ -435,7 +567,8 @@ export default function Usuarios() {
                         <td className="px-4 py-3.5">
                           {isEditRol ? (
                             <select
-                              defaultValue={u.rol}
+                              value={editRolValue}
+                              onChange={(event) => setEditRolValue(event.target.value as Rol)}
                               className="border-2 border-purple-300 rounded-lg px-2 py-1 text-xs
                                 text-slate-800 bg-white focus:outline-none cursor-pointer min-w-35"
                             >
@@ -479,7 +612,7 @@ export default function Usuarios() {
                           {isEditRol ? (
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => setEditRol(null)}
+                                onClick={() => guardarRol(u.id)}
                                 className="flex items-center gap-1 px-3 py-1.5 bg-green-500
                                   hover:bg-green-600 text-white text-xs font-bold rounded-lg
                                   transition-colors cursor-pointer"
@@ -500,7 +633,7 @@ export default function Usuarios() {
                                 {u.activo ? "¿Desactivar?" : "¿Activar?"}
                               </span>
                               <button
-                                onClick={() => setAccionId(null)}
+                                onClick={() => cambiarEstado(u)}
                                 className={`px-3 py-1.5 text-white text-xs font-bold rounded-lg
                                   transition-colors cursor-pointer
                                   ${u.activo ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}
@@ -522,6 +655,7 @@ export default function Usuarios() {
                                 onClick={() => {
                                   setAccionId(null);
                                   setEditRol(u.id);
+                                  setEditRolValue(u.rol);
                                 }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200
                                   text-slate-700 text-xs font-semibold rounded-lg hover:bg-purple-50
@@ -610,7 +744,7 @@ export default function Usuarios() {
 
           {/* Móvil: cards */}
           <div className="md:hidden space-y-3">
-            {USUARIOS_MOCK.map((u) => {
+            {usuarios.map((u) => {
               const rolCfg = ROL_CONFIG[u.rol];
               return (
                 <div
@@ -659,20 +793,41 @@ export default function Usuarios() {
                     </span>
                     <span>Sesión: {u.ultimaSesion ?? "—"}</span>
                   </div>
+                  {editandoRol === u.id && (
+                    <div className="flex items-center gap-2 pt-3">
+                      <select
+                        value={editRolValue}
+                        onChange={(event) => setEditRolValue(event.target.value as Rol)}
+                        className="flex-1 border-2 border-purple-300 rounded-lg px-2 py-1 text-xs
+                          text-slate-800 bg-white focus:outline-none cursor-pointer"
+                      >
+                        <option value="admin">Administrador</option>
+                        <option value="operativo">Operativo</option>
+                        <option value="visualizador">Visualizador</option>
+                      </select>
+                      <button
+                        onClick={() => guardarRol(u.id)}
+                        disabled={guardando}
+                        className="px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-green-300
+                          text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        Guardar
+                      </button>
+                    </div>
+                  )}
                   <div className="flex gap-2 pt-3">
-                    <button
-                      onClick={() =>
-                        setEditRol(editandoRol === u.id ? null : u.id)
-                      }
+                     <button
+                       onClick={() => {
+                         setEditRol(editandoRol === u.id ? null : u.id);
+                         setEditRolValue(u.rol);
+                       }}
                       className="flex-1 py-2 text-xs font-semibold text-purple-700 border
                         border-purple-200 rounded-xl hover:bg-purple-50 transition-colors cursor-pointer"
                     >
                       Cambiar rol
                     </button>
-                    <button
-                      onClick={() =>
-                        setAccionId(accionId === u.id ? null : u.id)
-                      }
+                     <button
+                       onClick={() => cambiarEstado(u)}
                       className={`flex-1 py-2 text-xs font-semibold rounded-xl border
                         transition-colors cursor-pointer
                         ${
@@ -715,10 +870,10 @@ export default function Usuarios() {
                 <p className="text-xs text-slate-500">{cfg.descripcion}</p>
                 <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400">
                   <span className="font-semibold text-slate-600">
-                    {USUARIOS_MOCK.filter((u) => u.rol === rol).length}
+                    {usuarios.filter((u) => u.rol === rol).length}
                   </span>{" "}
                   usuario
-                  {USUARIOS_MOCK.filter((u) => u.rol === rol).length !== 1
+                  {usuarios.filter((u) => u.rol === rol).length !== 1
                     ? "s"
                     : ""}{" "}
                   con este rol
@@ -874,23 +1029,40 @@ export default function Usuarios() {
                 <Field label="Nombre completo" required>
                   <input
                     type="text"
+                    value={fNombre}
+                    onChange={(event) => setFNombre(event.target.value)}
                     placeholder="Ej. María González"
                     className={inputCls}
-                    disabled
                   />
                 </Field>
 
                 <Field label="Correo electrónico" required>
                   <input
                     type="email"
+                    value={fEmail}
+                    onChange={(event) => setFEmail(event.target.value)}
                     placeholder="correo@empresa.gt"
                     className={inputCls}
-                    disabled
+                  />
+                </Field>
+
+                <Field label="Contraseña inicial" required>
+                  <input
+                    type="password"
+                    value={fPassword}
+                    onChange={(event) => setFPassword(event.target.value)}
+                    placeholder="Mínimo 8 caracteres"
+                    className={inputCls}
+                    autoComplete="new-password"
                   />
                 </Field>
 
                 <Field label="Rol asignado" required>
-                  <select className={selectCls} disabled>
+                  <select
+                    className={selectCls}
+                    value={fRol}
+                    onChange={(event) => setFRol(event.target.value as Rol)}
+                  >
                     <option value="operativo">Operativo</option>
                     <option value="visualizador">Visualizador</option>
                     <option value="admin">Administrador</option>
@@ -904,19 +1076,19 @@ export default function Usuarios() {
               {/* Vista previa del rol seleccionado */}
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                  Permisos del rol Operativo
+                  Permisos del rol {ROL_CONFIG[fRol].label}
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {PERMISOS.filter((p) => p.operativo !== false).map((p) => (
+                  {PERMISOS.filter((p) => p[fRol] !== false).map((p) => (
                     <div
                       key={p.modulo}
                       className="flex items-center gap-2 text-xs text-slate-600"
                     >
                       <span
                         className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0
-                        ${p.operativo === true ? "bg-green-100" : "bg-amber-100"}`}
+                        ${p[fRol] === true ? "bg-green-100" : "bg-amber-100"}`}
                       >
-                        {p.operativo === true ? (
+                        {p[fRol] === true ? (
                           <svg
                             viewBox="0 0 10 10"
                             fill="none"
@@ -952,16 +1124,16 @@ export default function Usuarios() {
                   rows={3}
                   placeholder="Bienvenido al sistema PIMOT…"
                   className={`${inputCls} resize-none`}
-                  disabled
                 />
               </Field>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  disabled
-                  className="flex-1 py-3.5 bg-orange-300 text-white text-base rounded-xl
-                    font-bold cursor-not-allowed flex items-center justify-center gap-2"
+                  onClick={invitarUsuario}
+                  disabled={guardando}
+                  className="flex-1 py-3.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-base rounded-xl
+                    font-bold transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <svg
                     viewBox="0 0 20 20"
@@ -975,11 +1147,17 @@ export default function Usuarios() {
                     <path d="M3 8l7-5 7 5v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8z" />
                     <polyline points="9 21 9 13 11 13 11 21" />
                   </svg>
-                  Enviar invitación
+                  {guardando ? "Creando usuario…" : "Enviar invitación"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setTab("usuarios")}
+                   onClick={() => {
+                     setFNombre("");
+                     setFEmail("");
+                     setFPassword("");
+                     setFRol("operativo");
+                     setTab("usuarios");
+                   }}
                   className="sm:w-44 py-3.5 border-2 border-slate-200 text-slate-700 rounded-xl
                     font-semibold hover:bg-slate-100 transition-colors cursor-pointer text-base"
                 >
