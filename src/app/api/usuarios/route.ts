@@ -90,3 +90,50 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ user: data.user }, { status: 201 });
 }
+
+export async function PUT(request: Request) {
+  if (!(await esAdministrador(request))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  const body = (await request.json()) as {
+    id?: string;
+    email?: string;
+    nombre?: string;
+    rol?: RolUsuarioDB;
+  };
+  const id = body.id?.trim();
+  const email = body.email?.trim().toLowerCase();
+  const nombre = body.nombre?.trim();
+  const rol = body.rol;
+  if (!id || !email || !nombre || !rol || !ROLES.includes(rol)) {
+    return NextResponse.json({ error: "Usuario, correo, nombre y rol son obligatorios." }, { status: 400 });
+  }
+
+  const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+    email,
+    user_metadata: { nombre, rol },
+  });
+  if (authError) return NextResponse.json({ error: authError.message }, { status: 400 });
+
+  const { error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .update({ nombre, rol })
+    .eq("id", id);
+  if (profileError) return NextResponse.json({ error: profileError.message }, { status: 400 });
+
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(request: Request) {
+  if (!(await esAdministrador(request))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+  const body = (await request.json()) as { id?: string };
+  const id = body.id?.trim();
+  if (!id) return NextResponse.json({ error: "El usuario es obligatorio." }, { status: 400 });
+
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
+}

@@ -6,6 +6,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/types/database";
+import {
+  DeleteIcon,
+  EditIcon,
+  EstadoBadge,
+  EstadoDropdown,
+  actionIconButtonClass,
+  type DropdownOption,
+} from "@/components/shared/InteractiveTableControls";
 
 type PilotoRow = Database["public"]["Tables"]["pilotos"]["Row"];
 type PilotoInsert = Database["public"]["Tables"]["pilotos"]["Insert"];
@@ -40,19 +48,13 @@ const inputCls =
 
 // ── Subcomponentes fuera del principal para evitar re-creación ──
 function BadgeActivo({ activo }: { activo: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
-      text-xs font-semibold
-      ${activo ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-500"}`}
-    >
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${activo ? "bg-green-500" : "bg-slate-400"}`}
-      />
-      {activo ? "Activo" : "Inactivo"}
-    </span>
-  );
+  return <EstadoBadge config={activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]} />;
 }
+
+const ESTADO_ACTIVO: DropdownOption<"true" | "false">[] = [
+  { value: "true", label: "Activo", bg: "bg-green-100", text: "text-green-800", dot: "bg-green-500", optionBg: "bg-green-50 hover:bg-green-100", optionText: "text-green-800" },
+  { value: "false", label: "Inactivo", bg: "bg-slate-100", text: "text-slate-500", dot: "bg-slate-400", optionBg: "bg-slate-100 hover:bg-slate-200", optionText: "text-slate-600" },
+];
 
 function Field({
   label,
@@ -121,6 +123,7 @@ export default function Pilotos() {
   const [fLicencia, setFLicencia] = useState("");
 
   const [editando, setEditando] = useState<EditandoState | null>(null);
+  const [editandoPilotoId, setEditandoPilotoId] = useState<string | null>(null);
   const [eliminando, setEliminando] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
 
@@ -217,14 +220,20 @@ export default function Pilotos() {
     setSaving(true);
     // viatico_monto se registrará en cada viaje, no en el piloto.
     // Se guarda un valor por defecto de 225 para referencia interna.
-    const payload: PilotoInsert = {
+    const datos = {
       nombre: fNombre.trim(),
       telefono: fTelefono.trim() || null,
       licencia: fLicencia.trim() || null,
+    };
+    const payload: PilotoInsert = {
+      ...datos,
       viatico_monto: 225,
       activo: true,
     };
-    const { error } = await supabase.from("pilotos").insert(payload);
+    const result = editandoPilotoId
+      ? await supabase.from("pilotos").update(datos).eq("id", editandoPilotoId)
+      : await supabase.from("pilotos").insert(payload);
+    const { error } = result;
     setSaving(false);
     if (error) {
       setSaveError(`Error al guardar: ${error.message}`);
@@ -238,15 +247,15 @@ export default function Pilotos() {
     await refetchPilotos();
     setTimeout(() => {
       setSaveOk(false);
+      setEditandoPilotoId(null);
       setTab("lista");
     }, 1600);
   };
 
-  const handleConfirmarEdicion = async () => {
-    if (!editando) return;
+  const actualizarEstadoPiloto = async (id: string, valor: string) => {
     setActionBusy(true);
-    const update: PilotoUpdate = { activo: editando.valor === "true" };
-    await supabase.from("pilotos").update(update).eq("id", editando.id);
+    const update: PilotoUpdate = { activo: valor === "true" };
+    await supabase.from("pilotos").update(update).eq("id", id);
     await refetchPilotos();
     setEditando(null);
     setActionBusy(false);
@@ -264,6 +273,16 @@ export default function Pilotos() {
   const resetAcciones = () => {
     setEditando(null);
     setEliminando(null);
+  };
+
+  const iniciarEdicionPiloto = (piloto: PilotoRow) => {
+    setEditandoPilotoId(piloto.id);
+    setFNombre(piloto.nombre);
+    setFTelefono(piloto.telefono ?? "");
+    setFLicencia(piloto.licencia ?? "");
+    setSaveError(null);
+    setSaveOk(false);
+    setTab("registrar");
   };
   const formatFecha = (iso: string | null) =>
     iso
@@ -283,54 +302,29 @@ export default function Pilotos() {
   ];
 
   function CeldaEstado({ p }: { p: PilotoRow }) {
-    if (editando?.id === p.id) {
-      return (
-        <select
-          value={editando.valor}
-          onChange={(e) =>
-            setEditando((prev) =>
-              prev ? { ...prev, valor: e.target.value } : null,
-            )
-          }
-          autoFocus
-          className="border-2 border-blue-300 rounded-lg px-2 py-1 text-xs text-slate-800
-            bg-white focus:outline-none focus:border-blue-400 cursor-pointer min-w-27.5"
-        >
-          <option value="true">Activo</option>
-          <option value="false">Inactivo</option>
-        </select>
-      );
-    }
-    return <BadgeActivo activo={p.activo} />;
+    const isOpen = editando?.id === p.id;
+    return (
+      <div className="relative inline-block">
+        <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
+          event.stopPropagation();
+          setEditando(isOpen ? null : { id: p.id, campo: "activo", valor: String(p.activo) });
+        }}>
+          <BadgeActivo activo={p.activo} />
+        </button>
+        {isOpen && (
+          <EstadoDropdown
+            value={editando.valor as "true" | "false"}
+            options={ESTADO_ACTIVO}
+            onSelect={(value) => actualizarEstadoPiloto(p.id, value)}
+            onClose={() => setEditando(null)}
+          />
+        )}
+      </div>
+    );
   }
 
   function CeldaAcciones({ p }: { p: PilotoRow }) {
-    const isEditing = editando?.id === p.id;
     const isDeleting = eliminando === p.id;
-    if (isEditing)
-      return (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleConfirmarEdicion}
-            disabled={actionBusy}
-            className="flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-          >
-            {actionBusy ? (
-              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              "✓"
-            )}
-            Guardar
-          </button>
-          <button
-            onClick={resetAcciones}
-            disabled={actionBusy}
-            className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            Cancelar
-          </button>
-        </div>
-      );
     if (isDeleting)
       return (
         <div className="flex items-center gap-2">
@@ -359,42 +353,22 @@ export default function Pilotos() {
         <button
           onClick={() => {
             resetAcciones();
-            setEditando({ id: p.id, campo: "activo", valor: String(p.activo) });
+            iniciarEdicionPiloto(p);
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors cursor-pointer"
+          className={`${actionIconButtonClass} text-orange-500 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600`}
+          title="Editar estado"
         >
-          <svg
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="w-3 h-3"
-          >
-            <path d="M11.333 2a1.886 1.886 0 012.667 2.667L4.667 14H2v-2.667L11.333 2z" />
-          </svg>
-          Estado
+          <EditIcon />
         </button>
         <button
           onClick={() => {
             resetAcciones();
             setEliminando(p.id);
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors cursor-pointer"
+          className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`}
+          title="Eliminar piloto"
         >
-          <svg
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="w-3 h-3"
-          >
-            <path d="M2 4h12M5.333 4V2.667h5.334V4M6.667 7.333v4M9.333 7.333v4M3.333 4l.667 9.333h8L12.667 4" />
-          </svg>
-          Eliminar
+          <DeleteIcon />
         </button>
       </div>
     );
@@ -947,7 +921,7 @@ export default function Pilotos() {
         <div className="w-full">
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
             <div className="bg-linear-to-r from-slate-800 to-slate-900 px-6 md:px-8 py-5">
-              <h3 className="font-bold text-white text-xl">Registrar Piloto</h3>
+              <h3 className="font-bold text-white text-xl">{editandoPilotoId ? "Editar Piloto" : "Registrar Piloto"}</h3>
               <p className="text-slate-400 text-sm mt-1">
                 El viático se registrará en cada viaje al momento de crearlo
               </p>
@@ -992,7 +966,7 @@ export default function Pilotos() {
                 <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700">
                   <span className="text-lg">✓</span>
                   <p className="text-sm font-bold">
-                    Piloto registrado correctamente.
+                    {editandoPilotoId ? "Piloto actualizado correctamente." : "Piloto registrado correctamente."}
                   </p>
                 </div>
               )}
@@ -1009,7 +983,7 @@ export default function Pilotos() {
                       Guardando…
                     </>
                   ) : (
-                    "+ Guardar piloto"
+                    editandoPilotoId ? "Guardar cambios" : "+ Guardar piloto"
                   )}
                 </button>
                 <button
@@ -1018,6 +992,7 @@ export default function Pilotos() {
                     setFNombre("");
                     setFTelefono("");
                     setFLicencia("");
+                    setEditandoPilotoId(null);
                     setSaveError(null);
                     setTab("lista");
                   }}

@@ -7,6 +7,14 @@ import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useClientes } from "@/hooks/useClientes";
 import { useViajes } from "@/hooks/useViajes";
+import {
+  EditIcon,
+  DeleteIcon,
+  EstadoBadge,
+  EstadoDropdown,
+  actionIconButtonClass,
+  type DropdownOption,
+} from "@/components/shared/InteractiveTableControls";
 
 type TabId = "lista" | "ingresos" | "registrar";
 type TipoCliente = "directo" | "indirecto";
@@ -44,6 +52,11 @@ const inputCls =
   "w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 bg-white " +
   "focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 " +
   "transition-all placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed";
+
+const ESTADO_ACTIVO: DropdownOption<"true" | "false">[] = [
+  { value: "true", label: "Activo", bg: "bg-green-100", text: "text-green-800", dot: "bg-green-500", optionBg: "bg-green-50 hover:bg-green-100", optionText: "text-green-800" },
+  { value: "false", label: "Inactivo", bg: "bg-slate-100", text: "text-slate-500", dot: "bg-slate-400", optionBg: "bg-slate-100 hover:bg-slate-200", optionText: "text-slate-600" },
+];
 
 function Field({
   label,
@@ -106,11 +119,12 @@ export default function Clientes() {
   const [tab, setTab] = useState<TabId>("lista");
 
   // Estado de acciones inline (visual, sin lógica aún)
-  const [accionId, setAccionId] = useState<string | null>(null);
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [estadoAbierto, setEstadoAbierto] = useState<string | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
 
   // Formulario
   const [fNombre, setFNombre] = useState("");
@@ -200,7 +214,7 @@ export default function Clientes() {
   }
 
   async function handleToggleActivo(cliente: (typeof clientes)[number]) {
-    setAccionId(null);
+    setEstadoAbierto(null);
     const { error: updateError } = await supabase
       .from("clientes")
       .update({ activo: !cliente.activo })
@@ -209,6 +223,23 @@ export default function Clientes() {
       setMensaje(updateError.message);
       return;
     }
+    await refetch();
+  }
+
+  async function handleEliminarCliente() {
+    if (!eliminandoId) return;
+    setGuardando(true);
+    const { error: deleteError } = await supabase
+      .from("clientes")
+      .delete()
+      .eq("id", eliminandoId);
+    setGuardando(false);
+    if (deleteError) {
+      setMensaje(`No se pudo eliminar el cliente: ${deleteError.message}`);
+      setEliminandoId(null);
+      return;
+    }
+    setEliminandoId(null);
     await refetch();
   }
 
@@ -236,7 +267,6 @@ export default function Clientes() {
               key={t.id}
               onClick={() => {
                 setTab(t.id);
-                setAccionId(null);
                 setDetalleId(null);
               }}
               className={`flex items-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-sm
@@ -342,7 +372,6 @@ export default function Clientes() {
                 </thead>
                 <tbody>
                   {clientes.map((c) => {
-                    const isAction = accionId === c.id;
                     return (
                       <tr
                         key={c.id}
@@ -388,35 +417,30 @@ export default function Clientes() {
                         </td>
                         {/* Estado */}
                         <td className="px-4 py-3.5">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1
-                            rounded-full text-xs font-semibold
-                            ${c.activo ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-500"}`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full
-                              ${c.activo ? "bg-green-500" : "bg-slate-400"}`}
-                            />
-                            {c.activo ? "Activo" : "Inactivo"}
-                          </span>
+                          <div className="relative inline-block">
+                            <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
+                              event.stopPropagation();
+                              setEstadoAbierto(estadoAbierto === c.id ? null : c.id);
+                            }}>
+                              <EstadoBadge config={c.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]} />
+                            </button>
+                            {estadoAbierto === c.id && <EstadoDropdown value={String(c.activo) as "true" | "false"} options={ESTADO_ACTIVO} onSelect={() => handleToggleActivo(c)} onClose={() => setEstadoAbierto(null)} />}
+                          </div>
                         </td>
                         {/* Acciones */}
                         <td className="px-4 py-3.5">
-                          {isAction ? (
+                          {eliminandoId === c.id ? (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500 font-medium mr-1">
-                                {c.activo ? "¿Desactivar?" : "¿Activar?"}
-                              </span>
+                              <span className="text-xs text-red-600 font-semibold mr-1">¿Eliminar?</span>
                                <button
-                                 onClick={() => handleToggleActivo(c)}
-                                className={`px-3 py-1.5 text-white text-xs font-bold rounded-lg
-                                  transition-colors cursor-pointer
-                                  ${c.activo ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}
+                                 onClick={handleEliminarCliente}
+                                 disabled={guardando}
+                                 className="px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
                               >
                                 Confirmar
                               </button>
                               <button
-                                onClick={() => setAccionId(null)}
+                                onClick={() => setEliminandoId(null)}
                                 className="px-3 py-1.5 border border-slate-200 text-slate-600
                                   text-xs font-semibold rounded-lg hover:bg-slate-100
                                   transition-colors cursor-pointer"
@@ -428,90 +452,17 @@ export default function Clientes() {
                              <div className="flex items-center gap-2">
                                <button
                                  onClick={() => iniciarEdicion(c)}
-                                 className="flex items-center gap-1.5 px-3 py-1.5 border
-                                   border-slate-200 text-slate-700 text-xs font-semibold rounded-lg
-                                   hover:bg-orange-50 hover:border-orange-300 hover:text-orange-700
-                                   transition-colors cursor-pointer"
+                                 className={`${actionIconButtonClass} text-orange-500 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600`}
+                                 title="Editar cliente"
                                >
-                                 Editar
+                                 <EditIcon />
                                </button>
-                               {/* Ver ingresos */}
                               <button
-                                onClick={() => {
-                                  setTab("ingresos");
-                                  setDetalleId(c.id);
-                                }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 border
-                                  border-slate-200 text-slate-700 text-xs font-semibold rounded-lg
-                                  hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700
-                                  transition-colors cursor-pointer"
+                                onClick={() => setEliminandoId(c.id)}
+                                className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`}
+                                title="Eliminar cliente"
                               >
-                                <svg
-                                  viewBox="0 0 14 14"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="w-3 h-3"
-                                >
-                                  <path d="M7 2v10M4 5h4.5a2 2 0 010 4H4M4 9h5" />
-                                </svg>
-                                Ingresos
-                              </button>
-                              {/* Activar / Desactivar */}
-                              <button
-                                onClick={() => setAccionId(c.id)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 border
-                                  text-xs font-semibold rounded-lg transition-colors cursor-pointer
-                                  ${
-                                    c.activo
-                                      ? "border-slate-200 text-slate-700 hover:bg-red-50 hover:border-red-300 hover:text-red-600"
-                                      : "border-slate-200 text-slate-700 hover:bg-green-50 hover:border-green-300 hover:text-green-600"
-                                  }`}
-                              >
-                                {c.activo ? (
-                                  <>
-                                    <svg
-                                      viewBox="0 0 14 14"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="1.5"
-                                      strokeLinecap="round"
-                                      className="w-3 h-3"
-                                    >
-                                      <circle cx="7" cy="7" r="5" />
-                                      <line
-                                        x1="4.5"
-                                        y1="4.5"
-                                        x2="9.5"
-                                        y2="9.5"
-                                      />
-                                      <line
-                                        x1="9.5"
-                                        y1="4.5"
-                                        x2="4.5"
-                                        y2="9.5"
-                                      />
-                                    </svg>
-                                    Desactivar
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg
-                                      viewBox="0 0 14 14"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="1.5"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      className="w-3 h-3"
-                                    >
-                                      <polyline points="2 7 5.5 10.5 12 3.5" />
-                                    </svg>
-                                    Activar
-                                  </>
-                                )}
+                                <DeleteIcon />
                               </button>
                             </div>
                           )}
@@ -551,16 +502,15 @@ export default function Clientes() {
                       )}
                     </div>
                   </div>
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full
-                    text-xs font-semibold shrink-0
-                    ${c.activo ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-500"}`}
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${c.activo ? "bg-green-500" : "bg-slate-400"}`}
-                    />
-                    {c.activo ? "Activo" : "Inactivo"}
-                  </span>
+                  <div className="relative inline-block">
+                    <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
+                      event.stopPropagation();
+                      setEstadoAbierto(estadoAbierto === c.id ? null : c.id);
+                    }}>
+                      <EstadoBadge compact config={c.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]} />
+                    </button>
+                    {estadoAbierto === c.id && <EstadoDropdown value={String(c.activo) as "true" | "false"} options={ESTADO_ACTIVO} onSelect={() => handleToggleActivo(c)} onClose={() => setEstadoAbierto(null)} />}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-xs mb-3">
                   <TipoBadge tipo={c.tipo} />
@@ -575,27 +525,23 @@ export default function Clientes() {
                 )}
                 <div className="flex gap-2 pt-3 border-t border-slate-100">
                   <button
-                    onClick={() => {
-                      setTab("ingresos");
-                      setDetalleId(c.id);
-                    }}
-                    className="flex-1 py-2 text-xs font-semibold text-blue-700 border
-                      border-blue-200 rounded-xl hover:bg-blue-50 transition-colors cursor-pointer"
+                    onClick={() => iniciarEdicion(c)}
+                    className={`${actionIconButtonClass} text-orange-500 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600`}
+                    title="Editar cliente"
                   >
-                    Ver ingresos
+                    <EditIcon />
                   </button>
-                  <button
-                    onClick={() => handleToggleActivo(c)}
-                    className={`flex-1 py-2 text-xs font-semibold rounded-xl border
-                      transition-colors cursor-pointer
-                      ${
-                        c.activo
-                          ? "text-red-600 border-red-200 hover:bg-red-50"
-                          : "text-green-700 border-green-200 hover:bg-green-50"
-                      }`}
-                  >
-                    {c.activo ? "Desactivar" : "Activar"}
-                  </button>
+                  {eliminandoId === c.id ? (
+                    <>
+                      <span className="flex-1 self-center text-xs text-red-600 font-semibold">¿Eliminar?</span>
+                      <button onClick={handleEliminarCliente} disabled={guardando} className="px-3 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-xl cursor-pointer">Confirmar</button>
+                      <button onClick={() => setEliminandoId(null)} className="px-3 py-2 border border-slate-200 text-slate-600 text-xs font-semibold rounded-xl hover:bg-slate-100 cursor-pointer">No</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setEliminandoId(c.id)} className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`} title="Eliminar cliente">
+                      <DeleteIcon />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

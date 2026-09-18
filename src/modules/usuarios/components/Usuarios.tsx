@@ -6,6 +6,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  DeleteIcon,
+  EditIcon,
+  EstadoBadge,
+  EstadoDropdown,
+  actionIconButtonClass,
+  type DropdownOption,
+} from "@/components/shared/InteractiveTableControls";
 
 type TabId = "usuarios" | "roles" | "invitar";
 type Rol = "admin" | "operativo" | "visualizador";
@@ -47,6 +55,21 @@ const ROL_CONFIG: Record<
     descripcion: "Solo lectura",
   },
 };
+
+const ESTADO_ACTIVO: DropdownOption<"true" | "false">[] = [
+  { value: "true", label: "Activo", bg: "bg-green-100", text: "text-green-800", dot: "bg-green-500", optionBg: "bg-green-50 hover:bg-green-100", optionText: "text-green-800" },
+  { value: "false", label: "Inactivo", bg: "bg-slate-100", text: "text-slate-500", dot: "bg-slate-400", optionBg: "bg-slate-100 hover:bg-slate-200", optionText: "text-slate-600" },
+];
+
+const ROL_OPTIONS: DropdownOption<Rol>[] = (Object.entries(ROL_CONFIG) as [Rol, (typeof ROL_CONFIG)[Rol]][]).map(([value, config]) => ({
+  value,
+  label: config.label,
+  bg: config.bg,
+  text: config.text,
+  dot: config.dot,
+  optionBg: `${config.bg} hover:brightness-95`,
+  optionText: config.text,
+}));
 
 // ── Matriz de permisos por rol ────────────────────────────────
 interface Permiso {
@@ -245,8 +268,10 @@ export default function Usuarios() {
   const [tab, setTab] = useState<TabId>("usuarios");
 
   // Estado visual de acciones (sin lógica real aún)
-  const [accionId, setAccionId] = useState<string | null>(null);
+  const [estadoAbierto, setEstadoAbierto] = useState<string | null>(null);
   const [editandoRol, setEditRol] = useState<string | null>(null);
+  const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [editRolValue, setEditRolValue] = useState<Rol>("operativo");
   const [guardando, setGuardando] = useState(false);
   const [fNombre, setFNombre] = useState("");
@@ -312,11 +337,11 @@ export default function Usuarios() {
     fetchUsuarios();
   }, [cargarUsuarios]);
 
-  async function guardarRol(id: string) {
+  async function guardarRol(id: string, rol: Rol) {
     setGuardando(true);
     const { error: updateError } = await supabase
       .from("profiles")
-      .update({ rol: editRolValue })
+      .update({ rol })
       .eq("id", id);
     setGuardando(false);
     if (updateError) {
@@ -328,8 +353,63 @@ export default function Usuarios() {
     await cargarUsuarios();
   }
 
+  function iniciarEdicionUsuario(usuario: UsuarioUI) {
+    setEditandoUsuarioId(usuario.id);
+    setFNombre(usuario.nombre);
+    setFEmail(usuario.email === "—" ? "" : usuario.email);
+    setFPassword("");
+    setFRol(usuario.rol);
+    setMensaje(null);
+    setTab("invitar");
+  }
+
+  async function guardarUsuario() {
+    if (!editandoUsuarioId || !fNombre.trim() || !fEmail.trim()) {
+      setMensaje("Completa nombre y correo electrónico.");
+      return;
+    }
+    setGuardando(true);
+    setMensaje(null);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch("/api/usuarios", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token ?? ""}` },
+      body: JSON.stringify({ id: editandoUsuarioId, nombre: fNombre, email: fEmail, rol: fRol }),
+    });
+    const result = (await response.json()) as { error?: string };
+    setGuardando(false);
+    if (!response.ok) {
+      setMensaje(result.error ?? "No se pudo actualizar el usuario.");
+      return;
+    }
+    setEditandoUsuarioId(null);
+    setFNombre(""); setFEmail(""); setFPassword(""); setFRol("operativo");
+    setTab("usuarios");
+    await cargarUsuarios();
+  }
+
+  async function eliminarUsuario() {
+    if (!eliminandoId) return;
+    setGuardando(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch("/api/usuarios", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token ?? ""}` },
+      body: JSON.stringify({ id: eliminandoId }),
+    });
+    const result = (await response.json()) as { error?: string };
+    setGuardando(false);
+    if (!response.ok) {
+      setMensaje(result.error ?? "No se pudo eliminar el usuario.");
+      setEliminandoId(null);
+      return;
+    }
+    setEliminandoId(null);
+    await cargarUsuarios();
+  }
+
   async function cambiarEstado(usuario: UsuarioUI) {
-    setAccionId(null);
+    setEstadoAbierto(null);
     const { error: updateError } = await supabase
       .from("profiles")
       .update({ activo: !usuario.activo })
@@ -411,7 +491,6 @@ export default function Usuarios() {
               key={t.id}
               onClick={() => {
                 setTab(t.id);
-                setAccionId(null);
                 setEditRol(null);
               }}
               className={`flex items-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-sm
@@ -528,7 +607,6 @@ export default function Usuarios() {
                 <tbody>
                   {usuarios.map((u) => {
                     const rolCfg = ROL_CONFIG[u.rol];
-                    const isAction = accionId === u.id;
                     const isEditRol = editandoRol === u.id;
 
                     return (
@@ -566,40 +644,36 @@ export default function Usuarios() {
                         {/* Rol — select inline al editar */}
                         <td className="px-4 py-3.5">
                           {isEditRol ? (
-                            <select
-                              value={editRolValue}
-                              onChange={(event) => setEditRolValue(event.target.value as Rol)}
-                              className="border-2 border-purple-300 rounded-lg px-2 py-1 text-xs
-                                text-slate-800 bg-white focus:outline-none cursor-pointer min-w-35"
-                            >
-                              <option value="admin">Administrador</option>
-                              <option value="operativo">Operativo</option>
-                              <option value="visualizador">Visualizador</option>
-                            </select>
+                            <div className="relative inline-block">
+                              <button type="button" className="cursor-pointer" title="Editar rol" onClick={(event) => event.stopPropagation()}>
+                                <EstadoBadge config={ROL_OPTIONS.find((option) => option.value === editRolValue) ?? ROL_OPTIONS[0]} />
+                              </button>
+                              <EstadoDropdown value={editRolValue} options={ROL_OPTIONS} onSelect={(value) => guardarRol(u.id, value)} onClose={() => setEditRol(null)} />
+                            </div>
                           ) : (
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
-                              text-xs font-semibold ${rolCfg.bg} ${rolCfg.text}`}
-                            >
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full ${rolCfg.dot}`}
-                              />
-                              {rolCfg.label}
-                            </span>
+                            <div className="relative inline-block">
+                              <button type="button" className="cursor-pointer" title="Editar rol" onClick={(event) => {
+                                event.stopPropagation();
+                                setEditRol(u.id);
+                                setEditRolValue(u.rol);
+                              }}>
+                                <EstadoBadge config={rolCfg} />
+                              </button>
+                            </div>
                           )}
                         </td>
 
                         {/* Estado */}
                         <td className="px-4 py-3.5">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
-                            text-xs font-semibold ${u.activo ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-500"}`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${u.activo ? "bg-green-500" : "bg-slate-400"}`}
-                            />
-                            {u.activo ? "Activo" : "Inactivo"}
-                          </span>
+                          <div className="relative inline-block">
+                            <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
+                              event.stopPropagation();
+                              setEstadoAbierto(estadoAbierto === u.id ? null : u.id);
+                            }}>
+                              <EstadoBadge config={u.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]} />
+                            </button>
+                            {estadoAbierto === u.id && <EstadoDropdown value={String(u.activo) as "true" | "false"} options={ESTADO_ACTIVO} onSelect={() => cambiarEstado(u)} onClose={() => setEstadoAbierto(null)} />}
+                          </div>
                         </td>
 
                         {/* Última sesión */}
@@ -609,127 +683,27 @@ export default function Usuarios() {
 
                         {/* Acciones */}
                         <td className="px-4 py-3.5">
-                          {isEditRol ? (
+                          {eliminandoId === u.id ? (
                             <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => guardarRol(u.id)}
-                                className="flex items-center gap-1 px-3 py-1.5 bg-green-500
-                                  hover:bg-green-600 text-white text-xs font-bold rounded-lg
-                                  transition-colors cursor-pointer"
-                              >
-                                ✓ Guardar
-                              </button>
-                              <button
-                                onClick={() => setEditRol(null)}
-                                className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs
-                                  font-semibold rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          ) : isAction ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500 font-medium mr-1">
-                                {u.activo ? "¿Desactivar?" : "¿Activar?"}
-                              </span>
-                              <button
-                                onClick={() => cambiarEstado(u)}
-                                className={`px-3 py-1.5 text-white text-xs font-bold rounded-lg
-                                  transition-colors cursor-pointer
-                                  ${u.activo ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}
-                              >
-                                Confirmar
-                              </button>
-                              <button
-                                onClick={() => setAccionId(null)}
-                                className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs
-                                  font-semibold rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                              >
-                                No
-                              </button>
+                              <span className="text-xs text-red-600 font-semibold mr-1">¿Eliminar?</span>
+                              <button onClick={eliminarUsuario} disabled={guardando} className="px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-lg cursor-pointer">Confirmar</button>
+                              <button onClick={() => setEliminandoId(null)} className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-100 cursor-pointer">No</button>
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              {/* Editar rol */}
                               <button
-                                onClick={() => {
-                                  setAccionId(null);
-                                  setEditRol(u.id);
-                                  setEditRolValue(u.rol);
-                                }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200
-                                  text-slate-700 text-xs font-semibold rounded-lg hover:bg-purple-50
-                                  hover:border-purple-300 hover:text-purple-700 transition-colors cursor-pointer"
+                                onClick={() => iniciarEdicionUsuario(u)}
+                                className={`${actionIconButtonClass} text-orange-500 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600`}
+                                title="Editar usuario"
                               >
-                                <svg
-                                  viewBox="0 0 14 14"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="w-3 h-3"
-                                >
-                                  <path d="M9.917 1.75a1.65 1.65 0 012.333 2.333L4.083 12.25H1.75V9.917L9.917 1.75z" />
-                                </svg>
-                                Rol
+                                <EditIcon />
                               </button>
-                              {/* Activar / Desactivar */}
                               <button
-                                onClick={() => {
-                                  setEditRol(null);
-                                  setAccionId(u.id);
-                                }}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs
-                                  font-semibold rounded-lg transition-colors cursor-pointer
-                                  ${
-                                    u.activo
-                                      ? "border-slate-200 text-slate-700 hover:bg-red-50 hover:border-red-300 hover:text-red-600"
-                                      : "border-slate-200 text-slate-700 hover:bg-green-50 hover:border-green-300 hover:text-green-600"
-                                  }`}
+                                onClick={() => setEliminandoId(u.id)}
+                                className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`}
+                                title="Eliminar usuario"
                               >
-                                {u.activo ? (
-                                  <>
-                                    <svg
-                                      viewBox="0 0 14 14"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="1.5"
-                                      strokeLinecap="round"
-                                      className="w-3 h-3"
-                                    >
-                                      <circle cx="7" cy="7" r="5" />
-                                      <line
-                                        x1="4.5"
-                                        y1="4.5"
-                                        x2="9.5"
-                                        y2="9.5"
-                                      />
-                                      <line
-                                        x1="9.5"
-                                        y1="4.5"
-                                        x2="4.5"
-                                        y2="9.5"
-                                      />
-                                    </svg>
-                                    Desactivar
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg
-                                      viewBox="0 0 14 14"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="1.5"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      className="w-3 h-3"
-                                    >
-                                      <polyline points="2 7 5.5 10.5 12 3.5" />
-                                    </svg>
-                                    Activar
-                                  </>
-                                )}
+                                <DeleteIcon />
                               </button>
                             </div>
                           )}
@@ -771,73 +745,54 @@ export default function Usuarios() {
                         <p className="text-xs text-slate-400">{u.email}</p>
                       </div>
                     </div>
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full
-                      text-xs font-semibold ${u.activo ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-500"}`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${u.activo ? "bg-green-500" : "bg-slate-400"}`}
-                      />
-                      {u.activo ? "Activo" : "Inactivo"}
-                    </span>
+                    <div className="relative inline-block">
+                      <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
+                        event.stopPropagation();
+                        setEstadoAbierto(estadoAbierto === u.id ? null : u.id);
+                      }}>
+                        <EstadoBadge compact config={u.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]} />
+                      </button>
+                      {estadoAbierto === u.id && <EstadoDropdown value={String(u.activo) as "true" | "false"} options={ESTADO_ACTIVO} onSelect={() => cambiarEstado(u)} onClose={() => setEstadoAbierto(null)} />}
+                    </div>
                   </div>
                   <div className="flex items-center justify-between text-xs text-slate-500 pb-3 border-b border-slate-100">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full
-                      font-semibold ${rolCfg.bg} ${rolCfg.text}`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${rolCfg.dot}`}
-                      />
-                      {rolCfg.label}
-                    </span>
+                    <button type="button" className="cursor-pointer" title="Editar rol" onClick={() => {
+                      setEditRol(editandoRol === u.id ? null : u.id);
+                      setEditRolValue(u.rol);
+                    }}>
+                      <EstadoBadge compact config={rolCfg} />
+                    </button>
                     <span>Sesión: {u.ultimaSesion ?? "—"}</span>
                   </div>
                   {editandoRol === u.id && (
                     <div className="flex items-center gap-2 pt-3">
-                      <select
-                        value={editRolValue}
-                        onChange={(event) => setEditRolValue(event.target.value as Rol)}
-                        className="flex-1 border-2 border-purple-300 rounded-lg px-2 py-1 text-xs
-                          text-slate-800 bg-white focus:outline-none cursor-pointer"
-                      >
-                        <option value="admin">Administrador</option>
-                        <option value="operativo">Operativo</option>
-                        <option value="visualizador">Visualizador</option>
-                      </select>
-                      <button
-                        onClick={() => guardarRol(u.id)}
-                        disabled={guardando}
-                        className="px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-green-300
-                          text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                      >
-                        Guardar
-                      </button>
+                      <div className="relative flex-1">
+                        <button type="button" className="cursor-pointer" title="Editar rol">
+                          <EstadoBadge config={ROL_OPTIONS.find((option) => option.value === editRolValue) ?? ROL_OPTIONS[0]} />
+                        </button>
+                        <EstadoDropdown value={editRolValue} options={ROL_OPTIONS} onSelect={(value) => guardarRol(u.id, value)} onClose={() => setEditRol(null)} />
+                      </div>
                     </div>
                   )}
                   <div className="flex gap-2 pt-3">
                      <button
-                       onClick={() => {
-                         setEditRol(editandoRol === u.id ? null : u.id);
-                         setEditRolValue(u.rol);
-                       }}
-                      className="flex-1 py-2 text-xs font-semibold text-purple-700 border
-                        border-purple-200 rounded-xl hover:bg-purple-50 transition-colors cursor-pointer"
+                       onClick={() => iniciarEdicionUsuario(u)}
+                      className={`${actionIconButtonClass} text-orange-500 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600`}
+                      title="Editar usuario"
                     >
-                      Cambiar rol
+                      <EditIcon />
                     </button>
-                     <button
-                       onClick={() => cambiarEstado(u)}
-                      className={`flex-1 py-2 text-xs font-semibold rounded-xl border
-                        transition-colors cursor-pointer
-                        ${
-                          u.activo
-                            ? "text-red-600 border-red-200 hover:bg-red-50"
-                            : "text-green-700 border-green-200 hover:bg-green-50"
-                        }`}
-                    >
-                      {u.activo ? "Desactivar" : "Activar"}
-                    </button>
+                    {eliminandoId === u.id ? (
+                      <>
+                        <span className="flex-1 self-center text-xs text-red-600 font-semibold">¿Eliminar?</span>
+                        <button onClick={eliminarUsuario} disabled={guardando} className="px-3 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-xl cursor-pointer">Confirmar</button>
+                        <button onClick={() => setEliminandoId(null)} className="px-3 py-2 border border-slate-200 text-slate-600 text-xs font-semibold rounded-xl hover:bg-slate-100 cursor-pointer">No</button>
+                      </>
+                    ) : (
+                      <button onClick={() => setEliminandoId(u.id)} className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`} title="Eliminar usuario">
+                        <DeleteIcon />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -1016,7 +971,7 @@ export default function Usuarios() {
             {/* Header igual que otros formularios */}
             <div className="bg-linear-to-r from-slate-800 to-slate-900 px-6 md:px-8 py-5">
               <h3 className="font-bold text-white text-xl">
-                Invitar nuevo usuario
+                {editandoUsuarioId ? "Editar usuario" : "Invitar nuevo usuario"}
               </h3>
               <p className="text-slate-400 text-sm mt-1">
                 El usuario recibirá un correo con un enlace para configurar su
@@ -1046,7 +1001,7 @@ export default function Usuarios() {
                   />
                 </Field>
 
-                <Field label="Contraseña inicial" required>
+                <Field label={editandoUsuarioId ? "Contraseña inicial (opcional)" : "Contraseña inicial"} required={!editandoUsuarioId}>
                   <input
                     type="password"
                     value={fPassword}
@@ -1130,7 +1085,7 @@ export default function Usuarios() {
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={invitarUsuario}
+                  onClick={editandoUsuarioId ? guardarUsuario : invitarUsuario}
                   disabled={guardando}
                   className="flex-1 py-3.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-base rounded-xl
                     font-bold transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -1147,7 +1102,7 @@ export default function Usuarios() {
                     <path d="M3 8l7-5 7 5v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8z" />
                     <polyline points="9 21 9 13 11 13 11 21" />
                   </svg>
-                  {guardando ? "Creando usuario…" : "Enviar invitación"}
+                  {guardando ? "Guardando…" : editandoUsuarioId ? "Guardar cambios" : "Enviar invitación"}
                 </button>
                 <button
                   type="button"
@@ -1156,6 +1111,7 @@ export default function Usuarios() {
                      setFEmail("");
                      setFPassword("");
                      setFRol("operativo");
+                     setEditandoUsuarioId(null);
                      setTab("usuarios");
                    }}
                   className="sm:w-44 py-3.5 border-2 border-slate-200 text-slate-700 rounded-xl
