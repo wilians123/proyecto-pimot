@@ -12,10 +12,10 @@ import Viajes from "@/modules/viajes/components/Viajes";
 import Flota from "@/modules/flota/components/Flota";
 import Clientes from "@/modules/clientes/components/Clientes";
 import Pilotos from "@/modules/pilotos/components/Pilotos";
-import ModuloPlaceholder from "@/components/shared/ModuloPlaceholder";
 import Usuarios from "@/modules/usuarios/components/Usuarios";
 import Alertas from "@/modules/alertas";
 import RentaChasis from "@/modules/renta-chasis";
+import Reportes from "@/modules/reportes";
 import { MODULO_HEADERS } from "@/lib/constants";
 import type { ModuloId } from "@/types/ui";
 
@@ -46,12 +46,7 @@ export default function AppShell() {
         return <Alertas />;
 
       case "reportes":
-        return (
-          <ModuloPlaceholder
-            titulo="Análisis y Reportes"
-            descripcion="Indicadores de desempeño, gráficas con Recharts y exportación en PDF/Excel."
-          />
-        );
+        return <Reportes />;
       default:
         return <Dashboard />;
     }

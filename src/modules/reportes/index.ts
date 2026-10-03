@@ -1,3 +1,1 @@
-// Módulo: reportes
-// Exporta los componentes públicos del módulo
-export {}
+export { default } from "./components/Reportes";
