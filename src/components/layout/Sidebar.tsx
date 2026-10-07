@@ -15,6 +15,7 @@
 import { icons, NAV_ITEMS } from "@/lib/constants";
 import { useAuth } from "@/context/AuthContext";
 import type { SidebarProps } from "@/types/ui";
+import { usePermisos } from "@/hooks/usePermisos";
 
 export default function Sidebar({
   modulo,
@@ -25,6 +26,8 @@ export default function Sidebar({
   setMobileOpen,
 }: SidebarProps) {
   const { profile, signOut } = useAuth();
+  const { puedeVerModulo } = usePermisos();
+  const navItems = NAV_ITEMS.filter((item) => puedeVerModulo(item.id));
   const nombre = profile?.nombre?.trim() || "Usuario";
   const rol = profile
     ? ({
@@ -111,7 +114,7 @@ export default function Sidebar({
 
       {/* ── Navegación — el único elemento con scroll ── */}
       <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const active = modulo === item.id;
           return (
             <div key={item.id} className="relative group">
@@ -282,7 +285,7 @@ export default function Sidebar({
 
               {/* Nav del drawer */}
               <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
-                {NAV_ITEMS.map((item) => {
+                {navItems.map((item) => {
                   const active = modulo === item.id;
                   return (
                     <button

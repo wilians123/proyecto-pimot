@@ -3,10 +3,12 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useClientes } from "@/hooks/useClientes";
 import { useViajes } from "@/hooks/useViajes";
+import { usePermisos } from "@/hooks/usePermisos";
+import { leerSeccionInicial, sincronizarSeccion } from "@/lib/seccion-url";
 import {
   EditIcon,
   DeleteIcon,
@@ -17,6 +19,8 @@ import {
 } from "@/components/shared/InteractiveTableControls";
 
 type TabId = "lista" | "ingresos" | "registrar";
+
+const SECCIONES_CLIENTES: readonly TabId[] = ["lista", "ingresos", "registrar"];
 type TipoCliente = "directo" | "indirecto";
 
 interface IngresoClienteUI {
@@ -54,8 +58,24 @@ const inputCls =
   "transition-all placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed";
 
 const ESTADO_ACTIVO: DropdownOption<"true" | "false">[] = [
-  { value: "true", label: "Activo", bg: "bg-green-100", text: "text-green-800", dot: "bg-green-500", optionBg: "bg-green-50 hover:bg-green-100", optionText: "text-green-800" },
-  { value: "false", label: "Inactivo", bg: "bg-slate-100", text: "text-slate-500", dot: "bg-slate-400", optionBg: "bg-slate-100 hover:bg-slate-200", optionText: "text-slate-600" },
+  {
+    value: "true",
+    label: "Activo",
+    bg: "bg-green-100",
+    text: "text-green-800",
+    dot: "bg-green-500",
+    optionBg: "bg-green-50 hover:bg-green-100",
+    optionText: "text-green-800",
+  },
+  {
+    value: "false",
+    label: "Inactivo",
+    bg: "bg-slate-100",
+    text: "text-slate-500",
+    dot: "bg-slate-400",
+    optionBg: "bg-slate-100 hover:bg-slate-200",
+    optionText: "text-slate-600",
+  },
 ];
 
 function Field({
@@ -114,9 +134,18 @@ function IconoClientes({ size = 28 }: { size?: number }) {
 }
 
 export default function Clientes() {
+  const { rol } = usePermisos();
+  const esAdmin = rol === "admin";
+  const puedeGestionar = rol === "admin" || rol === "operativo";
   const { clientes, loading, error, refetch } = useClientes();
   const { viajes } = useViajes();
-  const [tab, setTab] = useState<TabId>("lista");
+  const [tab, setTab] = useState<TabId>(() =>
+    leerSeccionInicial("clientes", "lista", SECCIONES_CLIENTES),
+  );
+
+  useEffect(() => {
+    sincronizarSeccion("clientes", tab);
+  }, [tab]);
 
   // Estado de acciones inline (visual, sin lógica aún)
   const [detalleId, setDetalleId] = useState<string | null>(null);
@@ -146,8 +175,12 @@ export default function Clientes() {
           cliente_id: cliente.id,
           cliente_nombre: cliente.nombre,
           tipo: cliente.tipo,
-          fletes: viajesCliente.filter((viaje) => viaje.tipo_servicio === "flete").length,
-          rentas: viajesCliente.filter((viaje) => viaje.tipo_servicio === "renta").length,
+          fletes: viajesCliente.filter(
+            (viaje) => viaje.tipo_servicio === "flete",
+          ).length,
+          rentas: viajesCliente.filter(
+            (viaje) => viaje.tipo_servicio === "renta",
+          ).length,
           total_servicios: viajesCliente.length,
           total_ingresos: null,
           ultimo_servicio: ultimo?.created_at ?? null,
@@ -171,6 +204,7 @@ export default function Clientes() {
   }
 
   function iniciarEdicion(cliente: (typeof clientes)[number]) {
+    if (!puedeGestionar) return;
     setEditandoId(cliente.id);
     setFNombre(cliente.nombre);
     setFTipo(cliente.tipo);
@@ -182,6 +216,7 @@ export default function Clientes() {
   }
 
   async function handleGuardarCliente() {
+    if (!puedeGestionar) return;
     if (!fNombre.trim()) {
       setMensaje("El nombre del cliente es obligatorio.");
       return;
@@ -214,6 +249,7 @@ export default function Clientes() {
   }
 
   async function handleToggleActivo(cliente: (typeof clientes)[number]) {
+    if (!esAdmin) return;
     setEstadoAbierto(null);
     const { error: updateError } = await supabase
       .from("clientes")
@@ -227,7 +263,7 @@ export default function Clientes() {
   }
 
   async function handleEliminarCliente() {
-    if (!eliminandoId) return;
+    if (!eliminandoId || !esAdmin) return;
     setGuardando(true);
     const { error: deleteError } = await supabase
       .from("clientes")
@@ -316,8 +352,7 @@ export default function Clientes() {
               },
               {
                 label: "Indirectos",
-                valor: clientes.filter((c) => c.tipo === "indirecto")
-                  .length,
+                valor: clientes.filter((c) => c.tipo === "indirecto").length,
                 color: "text-slate-600",
               },
             ].map(({ label, valor, color }) => (
@@ -417,55 +452,80 @@ export default function Clientes() {
                         </td>
                         {/* Estado */}
                         <td className="px-4 py-3.5">
-                          <div className="relative inline-block">
-                            <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
-                              event.stopPropagation();
-                              setEstadoAbierto(estadoAbierto === c.id ? null : c.id);
-                            }}>
-                              <EstadoBadge config={c.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]} />
-                            </button>
-                            {estadoAbierto === c.id && <EstadoDropdown value={String(c.activo) as "true" | "false"} options={ESTADO_ACTIVO} onSelect={() => handleToggleActivo(c)} onClose={() => setEstadoAbierto(null)} />}
-                          </div>
+                          {esAdmin && (
+                            <div className="relative inline-block">
+                              <button
+                                type="button"
+                                className="cursor-pointer"
+                                title="Editar estado"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEstadoAbierto(
+                                    estadoAbierto === c.id ? null : c.id,
+                                  );
+                                }}
+                              >
+                                <EstadoBadge
+                                  config={
+                                    c.activo
+                                      ? ESTADO_ACTIVO[0]
+                                      : ESTADO_ACTIVO[1]
+                                  }
+                                />
+                              </button>
+                              {estadoAbierto === c.id && (
+                                <EstadoDropdown
+                                  value={String(c.activo) as "true" | "false"}
+                                  options={ESTADO_ACTIVO}
+                                  onSelect={() => handleToggleActivo(c)}
+                                  onClose={() => setEstadoAbierto(null)}
+                                />
+                              )}
+                            </div>
+                          )}
                         </td>
                         {/* Acciones */}
                         <td className="px-4 py-3.5">
-                          {eliminandoId === c.id ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-red-600 font-semibold mr-1">¿Eliminar?</span>
-                               <button
-                                 onClick={handleEliminarCliente}
-                                 disabled={guardando}
-                                 className="px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                              >
-                                Confirmar
-                              </button>
-                              <button
-                                onClick={() => setEliminandoId(null)}
-                                className="px-3 py-1.5 border border-slate-200 text-slate-600
+                          {esAdmin &&
+                            (eliminandoId === c.id ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-red-600 font-semibold mr-1">
+                                  ¿Eliminar?
+                                </span>
+                                <button
+                                  onClick={handleEliminarCliente}
+                                  disabled={guardando}
+                                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                                >
+                                  Confirmar
+                                </button>
+                                <button
+                                  onClick={() => setEliminandoId(null)}
+                                  className="px-3 py-1.5 border border-slate-200 text-slate-600
                                   text-xs font-semibold rounded-lg hover:bg-slate-100
                                   transition-colors cursor-pointer"
-                              >
-                                No
-                              </button>
-                            </div>
-                          ) : (
-                             <div className="flex items-center gap-2">
-                               <button
-                                 onClick={() => iniciarEdicion(c)}
-                                 className={`${actionIconButtonClass} text-orange-500 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600`}
-                                 title="Editar cliente"
-                               >
-                                 <EditIcon />
-                               </button>
-                              <button
-                                onClick={() => setEliminandoId(c.id)}
-                                className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`}
-                                title="Eliminar cliente"
-                              >
-                                <DeleteIcon />
-                              </button>
-                            </div>
-                          )}
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => iniciarEdicion(c)}
+                                  className={`${actionIconButtonClass} text-orange-500 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600`}
+                                  title="Editar cliente"
+                                >
+                                  <EditIcon />
+                                </button>
+                                <button
+                                  onClick={() => setEliminandoId(c.id)}
+                                  className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`}
+                                  title="Eliminar cliente"
+                                >
+                                  <DeleteIcon />
+                                </button>
+                              </div>
+                            ))}
                         </td>
                       </tr>
                     );
@@ -502,15 +562,36 @@ export default function Clientes() {
                       )}
                     </div>
                   </div>
-                  <div className="relative inline-block">
-                    <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
-                      event.stopPropagation();
-                      setEstadoAbierto(estadoAbierto === c.id ? null : c.id);
-                    }}>
-                      <EstadoBadge compact config={c.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]} />
-                    </button>
-                    {estadoAbierto === c.id && <EstadoDropdown value={String(c.activo) as "true" | "false"} options={ESTADO_ACTIVO} onSelect={() => handleToggleActivo(c)} onClose={() => setEstadoAbierto(null)} />}
-                  </div>
+                  {esAdmin && (
+                    <div className="relative inline-block">
+                      <button
+                        type="button"
+                        className="cursor-pointer"
+                        title="Editar estado"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEstadoAbierto(
+                            estadoAbierto === c.id ? null : c.id,
+                          );
+                        }}
+                      >
+                        <EstadoBadge
+                          compact
+                          config={
+                            c.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]
+                          }
+                        />
+                      </button>
+                      {estadoAbierto === c.id && (
+                        <EstadoDropdown
+                          value={String(c.activo) as "true" | "false"}
+                          options={ESTADO_ACTIVO}
+                          onSelect={() => handleToggleActivo(c)}
+                          onClose={() => setEstadoAbierto(null)}
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center justify-between text-xs mb-3">
                   <TipoBadge tipo={c.tipo} />
@@ -531,17 +612,35 @@ export default function Clientes() {
                   >
                     <EditIcon />
                   </button>
-                  {eliminandoId === c.id ? (
-                    <>
-                      <span className="flex-1 self-center text-xs text-red-600 font-semibold">¿Eliminar?</span>
-                      <button onClick={handleEliminarCliente} disabled={guardando} className="px-3 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-xl cursor-pointer">Confirmar</button>
-                      <button onClick={() => setEliminandoId(null)} className="px-3 py-2 border border-slate-200 text-slate-600 text-xs font-semibold rounded-xl hover:bg-slate-100 cursor-pointer">No</button>
-                    </>
-                  ) : (
-                    <button onClick={() => setEliminandoId(c.id)} className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`} title="Eliminar cliente">
-                      <DeleteIcon />
-                    </button>
-                  )}
+                  {esAdmin &&
+                    (eliminandoId === c.id ? (
+                      <>
+                        <span className="flex-1 self-center text-xs text-red-600 font-semibold">
+                          ¿Eliminar?
+                        </span>
+                        <button
+                          onClick={handleEliminarCliente}
+                          disabled={guardando}
+                          className="px-3 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-xl cursor-pointer"
+                        >
+                          Confirmar
+                        </button>
+                        <button
+                          onClick={() => setEliminandoId(null)}
+                          className="px-3 py-2 border border-slate-200 text-slate-600 text-xs font-semibold rounded-xl hover:bg-slate-100 cursor-pointer"
+                        >
+                          No
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setEliminandoId(c.id)}
+                        className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`}
+                        title="Eliminar cliente"
+                      >
+                        <DeleteIcon />
+                      </button>
+                    ))}
                 </div>
               </div>
             ))}
@@ -552,29 +651,6 @@ export default function Clientes() {
       {/* ══════════════ TAB: INGRESOS ══════════════ */}
       {tab === "ingresos" && (
         <div className="space-y-4">
-          {/* Información derivada de los viajes reales */}
-          <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-            <svg
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="#2563EB"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-5 h-5 shrink-0 mt-0.5"
-            >
-              <circle cx="10" cy="10" r="8" />
-              <line x1="10" y1="6" x2="10" y2="10" />
-              <line x1="10" y1="14" x2="10.01" y2="14" />
-            </svg>
-            <p className="text-sm text-blue-800">
-                <span className="font-bold">Datos reales de viajes.</span>{" "}
-                Los servicios se calculan desde la tabla de viajes. La tabla
-                actual no contiene un importe de ingreso por servicio, por eso
-                ese total se muestra como no disponible.
-            </p>
-          </div>
-
           {/* KPIs globales */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
@@ -650,76 +726,81 @@ export default function Clientes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...ingresos].sort(
-                    (a, b) => (b.total_ingresos ?? 0) - (a.total_ingresos ?? 0),
-                  ).map((r, i) => (
-                    <tr
-                      key={r.cliente_id}
-                      className={`border-b border-slate-50 hover:bg-orange-50/20 transition-colors
+                  {[...ingresos]
+                    .sort(
+                      (a, b) =>
+                        (b.total_ingresos ?? 0) - (a.total_ingresos ?? 0),
+                    )
+                    .map((r, i) => (
+                      <tr
+                        key={r.cliente_id}
+                        className={`border-b border-slate-50 hover:bg-orange-50/20 transition-colors
                         ${detalleId === r.cliente_id ? "bg-blue-50/40" : ""}`}
-                    >
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          {/* Ranking visual */}
-                          <div
-                            className={`w-6 h-6 rounded-full flex items-center justify-center
+                      >
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            {/* Ranking visual */}
+                            <div
+                              className={`w-6 h-6 rounded-full flex items-center justify-center
                             text-[11px] font-black shrink-0
                             ${i === 0 ? "bg-amber-400 text-white" : i === 1 ? "bg-slate-300 text-slate-700" : i === 2 ? "bg-orange-300 text-white" : "bg-slate-100 text-slate-500"}`}
-                          >
-                            {i + 1}
-                          </div>
-                          <div
-                            className={`w-7 h-7 rounded-full flex items-center justify-center
+                            >
+                              {i + 1}
+                            </div>
+                            <div
+                              className={`w-7 h-7 rounded-full flex items-center justify-center
                             text-xs font-black text-white shrink-0
                             ${
                               r.tipo === "directo"
                                 ? "bg-linear-to-br from-blue-400 to-blue-600"
                                 : "bg-linear-to-br from-slate-300 to-slate-500"
                             }`}
-                          >
-                            {r.cliente_nombre.charAt(0)}
+                            >
+                              {r.cliente_nombre.charAt(0)}
+                            </div>
+                            <span className="font-semibold text-slate-800">
+                              {r.cliente_nombre}
+                            </span>
                           </div>
-                          <span className="font-semibold text-slate-800">
-                            {r.cliente_nombre}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <TipoBadge tipo={r.tipo} />
-                      </td>
-                      <td className="px-4 py-3.5 text-blue-700 font-semibold tabular-nums text-center">
-                        {r.fletes}
-                      </td>
-                      <td className="px-4 py-3.5 text-purple-700 font-semibold tabular-nums text-center">
-                        {r.rentas}
-                      </td>
-                      <td className="px-4 py-3.5 text-slate-600 tabular-nums text-center">
-                        {r.total_servicios}
-                      </td>
-                      <td className="px-4 py-3.5 font-bold text-green-700 tabular-nums">
-                        {formatMoneda(r.total_ingresos)}
-                      </td>
-                      <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">
-                        {r.ultimo_servicio ?? "—"}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <button
-                          onClick={() =>
-                            setDetalleId(
-                              detalleId === r.cliente_id ? null : r.cliente_id,
-                            )
-                          }
-                          className="px-3 py-1.5 text-xs font-semibold text-blue-600 border
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <TipoBadge tipo={r.tipo} />
+                        </td>
+                        <td className="px-4 py-3.5 text-blue-700 font-semibold tabular-nums text-center">
+                          {r.fletes}
+                        </td>
+                        <td className="px-4 py-3.5 text-purple-700 font-semibold tabular-nums text-center">
+                          {r.rentas}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-600 tabular-nums text-center">
+                          {r.total_servicios}
+                        </td>
+                        <td className="px-4 py-3.5 font-bold text-green-700 tabular-nums">
+                          {formatMoneda(r.total_ingresos)}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">
+                          {r.ultimo_servicio ?? "—"}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <button
+                            onClick={() =>
+                              setDetalleId(
+                                detalleId === r.cliente_id
+                                  ? null
+                                  : r.cliente_id,
+                              )
+                            }
+                            className="px-3 py-1.5 text-xs font-semibold text-blue-600 border
                             border-blue-200 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer
                             whitespace-nowrap"
-                        >
-                          {detalleId === r.cliente_id
-                            ? "Cerrar"
-                            : "Ver detalle"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          >
+                            {detalleId === r.cliente_id
+                              ? "Cerrar"
+                              : "Ver detalle"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
                 {/* Fila de totales */}
                 <tfoot>
@@ -741,7 +822,10 @@ export default function Clientes() {
                     </td>
                     <td className="px-4 py-3 font-black text-green-700 tabular-nums text-lg">
                       {formatMoneda(
-                        ingresos.reduce((a, r) => a + (r.total_ingresos ?? 0), 0),
+                        ingresos.reduce(
+                          (a, r) => a + (r.total_ingresos ?? 0),
+                          0,
+                        ),
                       )}
                     </td>
                     <td colSpan={2} />
@@ -753,60 +837,62 @@ export default function Clientes() {
 
           {/* Móvil: cards de ingresos */}
           <div className="md:hidden space-y-3">
-            {[...ingresos].sort(
-              (a, b) => (b.total_ingresos ?? 0) - (a.total_ingresos ?? 0),
-            ).map((r, i) => (
-              <div
-                key={r.cliente_id}
-                className="bg-white rounded-2xl border border-slate-200 p-4"
-              >
-                <div className="flex items-center gap-2.5 mb-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center
+            {[...ingresos]
+              .sort((a, b) => (b.total_ingresos ?? 0) - (a.total_ingresos ?? 0))
+              .map((r, i) => (
+                <div
+                  key={r.cliente_id}
+                  className="bg-white rounded-2xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center
                     text-[11px] font-black shrink-0
                     ${i === 0 ? "bg-amber-400 text-white" : i === 1 ? "bg-slate-300 text-slate-700" : i === 2 ? "bg-orange-300 text-white" : "bg-slate-100 text-slate-500"}`}
-                  >
-                    {i + 1}
-                  </div>
-                  <p className="font-bold text-slate-800">{r.cliente_nombre}</p>
-                  <TipoBadge tipo={r.tipo} />
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                  {[
-                    {
-                      label: "Total ingresos",
-                      valor: formatMoneda(r.total_ingresos),
-                      color: "text-green-700",
-                    },
-                    {
-                      label: "Servicios",
-                      valor: String(r.total_servicios),
-                      color: "text-slate-700",
-                    },
-                    {
-                      label: "Fletes",
-                      valor: String(r.fletes),
-                      color: "text-blue-700",
-                    },
-                    {
-                      label: "Rentas",
-                      valor: String(r.rentas),
-                      color: "text-purple-700",
-                    },
-                  ].map(({ label, valor, color }) => (
-                    <div key={label} className="bg-slate-50 rounded-lg p-2">
-                      <p className="text-slate-400 mb-0.5">{label}</p>
-                      <p className={`font-bold tabular-nums ${color}`}>
-                        {valor}
-                      </p>
+                    >
+                      {i + 1}
                     </div>
-                  ))}
+                    <p className="font-bold text-slate-800">
+                      {r.cliente_nombre}
+                    </p>
+                    <TipoBadge tipo={r.tipo} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                    {[
+                      {
+                        label: "Total ingresos",
+                        valor: formatMoneda(r.total_ingresos),
+                        color: "text-green-700",
+                      },
+                      {
+                        label: "Servicios",
+                        valor: String(r.total_servicios),
+                        color: "text-slate-700",
+                      },
+                      {
+                        label: "Fletes",
+                        valor: String(r.fletes),
+                        color: "text-blue-700",
+                      },
+                      {
+                        label: "Rentas",
+                        valor: String(r.rentas),
+                        color: "text-purple-700",
+                      },
+                    ].map(({ label, valor, color }) => (
+                      <div key={label} className="bg-slate-50 rounded-lg p-2">
+                        <p className="text-slate-400 mb-0.5">{label}</p>
+                        <p className={`font-bold tabular-nums ${color}`}>
+                          {valor}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Último servicio: {r.ultimo_servicio ?? "—"}
+                  </p>
                 </div>
-                <p className="text-xs text-slate-400">
-                  Último servicio: {r.ultimo_servicio ?? "—"}
-                </p>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}
@@ -816,7 +902,7 @@ export default function Clientes() {
         <div className="w-full">
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
             <div className="bg-linear-to-r from-slate-800 to-slate-900 px-6 md:px-8 py-5">
-                <h3 className="font-bold text-white text-xl">
+              <h3 className="font-bold text-white text-xl">
                 {editandoId ? "Editar Cliente" : "Registrar Cliente"}
               </h3>
               <p className="text-slate-400 text-sm mt-1">
@@ -935,28 +1021,6 @@ export default function Clientes() {
                 </div>
               </div>
 
-              {/* Aviso funcionalidad */}
-              <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                <svg
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="#D97706"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-5 h-5 shrink-0 mt-0.5"
-                >
-                  <path d="M8.57 3.43L1.5 15.5a1.67 1.67 0 001.43 2.5h13.14a1.67 1.67 0 001.43-2.5L10.43 3.43a1.67 1.67 0 00-2.86 0z" />
-                  <line x1="10" y1="8" x2="10" y2="12" />
-                  <line x1="10" y1="15" x2="10.01" y2="15" />
-                </svg>
-                <p className="text-sm text-amber-800">
-                  <span className="font-bold">
-                    {mensaje ?? "Los cambios se guardarán en Supabase."}
-                  </span>
-                </p>
-              </div>
-
               {/* Botones */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
                 <button
@@ -978,11 +1042,18 @@ export default function Clientes() {
                     <line x1="8" y1="2" x2="8" y2="14" />
                     <line x1="2" y1="8" x2="14" y2="8" />
                   </svg>
-                  {guardando ? "Guardando…" : editandoId ? "Guardar cambios" : "Guardar cliente"}
+                  {guardando
+                    ? "Guardando…"
+                    : editandoId
+                      ? "Guardar cambios"
+                      : "Guardar cliente"}
                 </button>
                 <button
                   type="button"
-                   onClick={() => { resetForm(); setTab("lista"); }}
+                  onClick={() => {
+                    resetForm();
+                    setTab("lista");
+                  }}
                   className="sm:w-44 py-3.5 border-2 border-slate-200 text-slate-700 rounded-xl
                     font-semibold hover:bg-slate-100 transition-colors cursor-pointer text-base"
                 >

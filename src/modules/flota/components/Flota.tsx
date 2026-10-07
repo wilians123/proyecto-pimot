@@ -9,6 +9,8 @@ import { supabase } from '@/lib/supabase'
 import { ESTADO_CABEZAL_CONFIG, ESTADO_CHASIS_CONFIG, icons } from '@/lib/constants'
 import type { Database, EstadoCabezalDB, EstadoChasisDB, TamañoChasisDB } from '@/types/database'
 import type { TipoEquipo } from '@/types/ui'
+import { usePermisos } from '@/hooks/usePermisos'
+import { leerSeccionInicial, sincronizarSeccion } from '@/lib/seccion-url'
 
 // ── Tipos derivados directamente de Database (fuente única de verdad) ──
 type CabezalRow    = Database['public']['Tables']['cabezales']['Row']
@@ -19,6 +21,8 @@ type CabezalUpdate = Database['public']['Tables']['cabezales']['Update']
 type ChasisUpdate  = Database['public']['Tables']['chasis']['Update']
 
 type TabFlota = 'cabezales' | 'chasis' | 'registrar'
+
+const SECCIONES_FLOTA: readonly TabFlota[] = ['cabezales', 'chasis', 'registrar']
 
 // ── Estado de edición inline de estado ───────────────────────
 interface EditingState {
@@ -310,7 +314,7 @@ function LoadingSkeleton() {
 }
 
 // ── Estado vacío ──────────────────────────────────────────────
-function EmptyState({ tipo, onRegistrar }: { tipo: string; onRegistrar: () => void }) {
+function EmptyState({ tipo, onRegistrar }: { tipo: string; onRegistrar?: () => void }) {
   return (
     <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 py-16
       flex flex-col items-center gap-4 text-center px-6">
@@ -321,14 +325,14 @@ function EmptyState({ tipo, onRegistrar }: { tipo: string; onRegistrar: () => vo
         <p className="font-bold text-slate-700 text-lg">Sin {tipo} registrados</p>
         <p className="text-sm text-slate-400 mt-1">Registra el primer equipo para comenzar</p>
       </div>
-      <button
+      {onRegistrar && <button
         onClick={onRegistrar}
         className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white
           px-6 py-3 rounded-xl font-bold transition-colors cursor-pointer shadow-md shadow-orange-200"
       >
         <span>+</span>
         Registrar {tipo === 'cabezales' ? 'cabezal' : 'chasis'}
-      </button>
+      </button>}
     </div>
   )
 }
@@ -337,8 +341,15 @@ function EmptyState({ tipo, onRegistrar }: { tipo: string; onRegistrar: () => vo
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
 export default function Flota() {
+  const { puede } = usePermisos()
+  const esAdmin = puede('flota.crear')
+  const puedeEstado = puede('flota.cambiarEstado')
+  const [tabSolicitado, setTab] = useState<TabFlota>(() =>
+    leerSeccionInicial('flota', 'cabezales', SECCIONES_FLOTA),
+  )
+  const tabPermitido = tabSolicitado !== 'registrar' || esAdmin
+  const tab = tabPermitido ? tabSolicitado : 'cabezales'
   // ── Estado de datos ──────────────────────────────────────────
-  const [tab,       setTab]       = useState<TabFlota>('cabezales')
   const [cabezales, setCabezales] = useState<CabezalRow[]>([])
   const [chasis,    setChasis]    = useState<ChasisRow[]>([])
   const [loading,   setLoading]   = useState(false)
@@ -366,6 +377,10 @@ export default function Flota() {
   // FIX: equipoEditando se renderiza a nivel raíz del componente,
   // no dentro del tab 'registrar', para que sea visible desde cualquier tab.
   const [equipoEditando, setEquipoEditando] = useState<EquipoEditandoState | null>(null)
+
+  useEffect(() => {
+    sincronizarSeccion('flota', tab)
+  }, [tab, tabPermitido])
 
   // ── Refetch ──────────────────────────────────────────────────
   const refetchCabezales = useCallback(async () => {
@@ -408,6 +423,7 @@ export default function Flota() {
   // GUARDAR NUEVO EQUIPO
   // ─────────────────────────────────────────────────────────────
   const handleGuardar = async () => {
+    if (!esAdmin) return
     setSaveError(null)
     if (!fPlaca.trim()) { setSaveError('El número de placa es obligatorio.'); return }
 
@@ -468,6 +484,7 @@ export default function Flota() {
   // ACTUALIZAR ESTADO (dropdown inline)
   // ─────────────────────────────────────────────────────────────
   const handleActualizarEstado = async (id: string, valor: string) => {
+    if (!puedeEstado) return
     setActionBusy(true)
 
     if (tab === 'cabezales') {
@@ -504,6 +521,7 @@ export default function Flota() {
   // FIX: ya no cambia de tab, simplemente abre el modal encima
   // ─────────────────────────────────────────────────────────────
   const handleAbrirEdicion = (id: string) => {
+    if (!esAdmin) return
     resetAcciones()
     setSaveError(null)
     setSaveSuccess(false)
@@ -540,7 +558,7 @@ export default function Flota() {
   // GUARDAR EDICIÓN COMPLETA
   // ─────────────────────────────────────────────────────────────
   const handleGuardarEdicionCompleta = async () => {
-    if (!equipoEditando) return
+    if (!equipoEditando || !esAdmin) return
 
     setSaveError(null)
     if (!fPlaca.trim()) {
@@ -603,7 +621,7 @@ export default function Flota() {
   // ELIMINAR EQUIPO
   // ─────────────────────────────────────────────────────────────
   const handleConfirmarEliminacion = async () => {
-    if (!deletingId) return
+    if (!deletingId || !esAdmin) return
     setActionBusy(true)
 
     if (tab === 'cabezales') {
@@ -640,11 +658,12 @@ export default function Flota() {
   const TABS_FLOTA = [
     { id: 'cabezales' as TabFlota, label: 'Cabezales', count: cabezales.length },
     { id: 'chasis'    as TabFlota, label: 'Chasis',    count: chasis.length    },
-    { id: 'registrar' as TabFlota, label: '+ Registrar equipo' },
+    ...(esAdmin ? [{ id: 'registrar' as TabFlota, label: '+ Registrar equipo' }] : []),
   ]
 
   // ── Celdas de acción ─────────────────────────────────────────
   function CeldaAcciones({ id }: { id: string }) {
+    if (!esAdmin) return null
     const isDeleting = deletingId === id
 
     if (isDeleting) {
@@ -839,7 +858,7 @@ export default function Flota() {
       {tab === 'cabezales' && (
         <div className="space-y-4">
           {loading ? <LoadingSkeleton /> : cabezales.length === 0 ? (
-            <EmptyState tipo="cabezales" onRegistrar={() => { setTipo('cabezal'); setTab('registrar') }} />
+            <EmptyState tipo="cabezales" onRegistrar={esAdmin ? () => { setTipo('cabezal'); setTab('registrar') } : undefined} />
           ) : (
             <>
               {/* Desktop */}
@@ -855,7 +874,7 @@ export default function Flota() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-100">
-                        {['Placa', 'Marca', 'Modelo', 'N° Serie', 'Estado', 'Notas', 'Acciones'].map(h => (
+                        {['Placa', 'Marca', 'Modelo', 'N° Serie', 'Estado', 'Notas', ...(esAdmin ? ['Acciones'] : [])].map(h => (
                           <th key={h}
                             className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                             {h}
@@ -875,9 +894,7 @@ export default function Flota() {
                             <CeldaEstadoCabezal row={c} />
                           </td>
                           <td className="px-4 py-3.5 text-slate-400 text-xs max-w-40 truncate">{c.notas ?? '—'}</td>
-                          <td className="px-4 py-3.5">
-                            <CeldaAcciones id={c.id} />
-                          </td>
+                          {esAdmin && <td className="px-4 py-3.5"><CeldaAcciones id={c.id} /></td>}
                         </tr>
                       ))}
                     </tbody>
@@ -903,9 +920,7 @@ export default function Flota() {
                       <p className="text-xs font-mono text-slate-400 mt-1">Serie: {c.numero_serie}</p>
                     )}
                     {c.notas && <p className="text-xs text-slate-400 mt-1 italic">&quot;{c.notas}&quot;</p>}
-                    <div className="mt-3 pt-3 border-t border-slate-100">
-                      <CeldaAcciones id={c.id} />
-                    </div>
+                    {esAdmin && <div className="mt-3 pt-3 border-t border-slate-100"><CeldaAcciones id={c.id} /></div>}
                   </div>
                 ))}
               </div>
@@ -918,7 +933,7 @@ export default function Flota() {
       {tab === 'chasis' && (
         <div className="space-y-4">
           {loading ? <LoadingSkeleton /> : chasis.length === 0 ? (
-            <EmptyState tipo="chasis" onRegistrar={() => { setTipo('chasis'); setTab('registrar') }} />
+            <EmptyState tipo="chasis" onRegistrar={esAdmin ? () => { setTipo('chasis'); setTab('registrar') } : undefined} />
           ) : (
             <>
               {/* Desktop */}
@@ -934,7 +949,7 @@ export default function Flota() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-100">
-                        {['Placa', 'Marca', 'Modelo', 'N° Serie', 'Tamaño', 'Estado', 'Notas', 'Acciones'].map(h => (
+                        {['Placa', 'Marca', 'Modelo', 'N° Serie', 'Tamaño', 'Estado', 'Notas', ...(esAdmin ? ['Acciones'] : [])].map(h => (
                           <th key={h}
                             className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                             {h}
@@ -959,9 +974,7 @@ export default function Flota() {
                             <CeldaEstadoChasis row={c} />
                           </td>
                           <td className="px-4 py-3.5 text-slate-400 text-xs max-w-35 truncate">{c.notas ?? '—'}</td>
-                          <td className="px-4 py-3.5">
-                            <CeldaAcciones id={c.id} />
-                          </td>
+                          {esAdmin && <td className="px-4 py-3.5"><CeldaAcciones id={c.id} /></td>}
                         </tr>
                       ))}
                     </tbody>
@@ -990,9 +1003,7 @@ export default function Flota() {
                       {c.tamaño} pies
                     </span>
                     {c.notas && <p className="text-xs text-slate-400 mt-1 italic">&quot;{c.notas}&quot;</p>}
-                    <div className="mt-3 pt-3 border-t border-slate-100">
-                      <CeldaAcciones id={c.id} />
-                    </div>
+                    {esAdmin && <div className="mt-3 pt-3 border-t border-slate-100"><CeldaAcciones id={c.id} /></div>}
                   </div>
                 ))}
               </div>

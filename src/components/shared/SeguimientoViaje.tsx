@@ -37,6 +37,7 @@ interface SeguimientoViajeProps {
   bloqueado: boolean;
   lecturasInicioConfirm?: number;
   lecturasFueraDestino: number;
+  soloLectura?: boolean;
   onEstadoCambiado: () => void;
 }
 
@@ -53,6 +54,7 @@ export default function SeguimientoViaje({
   bloqueado,
   lecturasInicioConfirm = 0,
   lecturasFueraDestino,
+  soloLectura = false,
   onEstadoCambiado,
 }: SeguimientoViajeProps) {
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -97,6 +99,7 @@ export default function SeguimientoViaje({
   // Procesa la actualización de estado del viaje
   const ejecutarTransicion = useCallback(
     async (estadoNuevo: string) => {
+      if (soloLectura) return;
       setProcesandoTransicion(true);
       limpiarSafetyTimer();
 
@@ -117,31 +120,33 @@ export default function SeguimientoViaje({
         console.error("[SeguimientoViaje] Error actualizando estado:", error);
       }
     },
-    [viajeId, onEstadoCambiado, limpiarSafetyTimer],
+    [viajeId, onEstadoCambiado, limpiarSafetyTimer, soloLectura],
   );
 
   const incrementarContadorInicio = useCallback(async () => {
+    if (soloLectura) return;
     const { error } = await incrementarLecturasInicio(viajeId);
     if (!error) {
       onEstadoCambiado();
     } else {
       console.error("[SeguimientoViaje] Error incrementando contador de inicio:", error);
     }
-  }, [viajeId, onEstadoCambiado]);
+  }, [viajeId, onEstadoCambiado, soloLectura]);
 
   // Incrementa el contador de lecturas fuera del destino
   const incrementarContadorDestino = useCallback(async () => {
+    if (soloLectura) return;
     const { error } = await incrementarLecturasDestino(viajeId);
     if (!error) {
       onEstadoCambiado();
     } else {
       console.error("[SeguimientoViaje] Error incrementando contador:", error);
     }
-  }, [viajeId, onEstadoCambiado]);
+  }, [viajeId, onEstadoCambiado, soloLectura]);
 
   // Procesar la transición detectada por el geofence.
   useEffect(() => {
-    if (!transicion || procesandoTransicion) return;
+    if (soloLectura || !transicion || procesandoTransicion) return;
     if (trackers.length === 0) return;
 
     const clave =
@@ -167,6 +172,7 @@ export default function SeguimientoViaje({
     return () => clearTimeout(t);
   }, [
     transicion,
+    soloLectura,
     procesandoTransicion,
     estadoViaje,
     lecturasInicioConfirm,

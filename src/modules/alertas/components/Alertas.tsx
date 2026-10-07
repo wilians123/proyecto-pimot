@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import AlertaBadge from "@/components/shared/AlertaBadge";
 import KpiCard from "@/components/shared/KpiCard";
 import { useAlertas } from "@/hooks/useAlertas";
 import { alertaAResumen } from "@/utils/alertaView";
+import { sincronizarSeccion } from "@/lib/seccion-url";
 
 function esHoy(fecha: string) {
   const date = new Date(fecha);
@@ -17,6 +18,9 @@ function esHoy(fecha: string) {
 }
 
 export default function Alertas() {
+  useEffect(() => {
+    sincronizarSeccion("alertas", "principal");
+  }, []);
   const { alertas, loading } = useAlertas();
   const activas = useMemo(
     () => alertas.filter((alerta) => ["pendiente", "enviada"].includes(alerta.estado)),

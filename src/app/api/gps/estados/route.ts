@@ -14,6 +14,7 @@
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { hasRole } from "@/lib/server-auth";
 
 // Tipos del response de Navixy
 interface NavixyGpsLocation {
@@ -51,7 +52,10 @@ export interface TrackerEstado {
 
 const NAVIXY_BASE = "https://api.us.navixy.com/v2";
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: Request): Promise<NextResponse> {
+  if (!(await hasRole(request, ["admin", "operativo", "visualizador"]))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
   const hash = process.env.NAVIXY_HASH;
   if (!hash) {
     return NextResponse.json(

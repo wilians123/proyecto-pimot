@@ -1,3 +1,4 @@
+-- OBSOLETO: reemplazado por 202610030001_roles_y_rls.sql. NO EJECUTAR: sus políticas permisivas se sumarían a las nuevas y anularían el control por rol.
 -- rls_viajes_minimal.sql
 -- Optional minimal policies for local/manual testing if RLS blocks authenticated users.
 -- Review before production use.

@@ -18,11 +18,11 @@ async function esAdministrador(request: Request) {
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
-    .select("rol")
+    .select("rol, activo")
     .eq("id", user.id)
     .single();
 
-  return profile?.rol === "admin";
+  return profile?.rol === "admin" && profile.activo === true;
 }
 
 export async function GET(request: Request) {
@@ -81,6 +81,7 @@ export async function POST(request: Request) {
     email,
     password,
     email_confirm: true,
+    app_metadata: { rol },
     user_metadata: { nombre, rol },
   });
 
@@ -116,11 +117,15 @@ export async function PUT(request: Request) {
   });
   if (authError) return NextResponse.json({ error: authError.message }, { status: 400 });
 
-  const { error: profileError } = await supabaseAdmin
+  const { data: profileData, error: profileError } = await supabaseAdmin
     .from("profiles")
     .update({ nombre, rol })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
   if (profileError) return NextResponse.json({ error: profileError.message }, { status: 400 });
+  if (!profileData || profileData.length === 0) {
+    return NextResponse.json({ error: "No tienes permiso para modificar este usuario." }, { status: 403 });
+  }
 
   return NextResponse.json({ ok: true });
 }

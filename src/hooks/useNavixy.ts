@@ -8,6 +8,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { TrackerEstado } from "@/app/api/gps/estados/route";
+import { supabase } from "@/lib/supabase";
 
 export type { TrackerEstado };
 
@@ -56,7 +57,12 @@ export function useNavixy(opciones: UseNavixyOptions = {}) {
   useEffect(() => {
     async function fetchMeta() {
       try {
-        const res = await fetch("/api/gps/trackers");
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch("/api/gps/trackers", {
+          headers: session
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : undefined,
+        });
         if (!res.ok) return;
         const json = (await res.json()) as {
           trackers: Array<{
@@ -91,7 +97,12 @@ export function useNavixy(opciones: UseNavixyOptions = {}) {
   // ── Fetch de estados GPS ─────────────────────────────────────
   const fetchEstados = useCallback(async () => {
     try {
-      const res = await fetch("/api/gps/estados");
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/gps/estados", {
+        headers: session
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : undefined,
+      });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
         setError(body.error ?? `HTTP ${res.status}`);

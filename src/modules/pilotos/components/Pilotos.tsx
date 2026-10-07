@@ -6,6 +6,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/types/database";
+import { usePermisos } from "@/hooks/usePermisos";
+import { leerSeccionInicial, sincronizarSeccion } from "@/lib/seccion-url";
 import {
   DeleteIcon,
   EditIcon,
@@ -21,6 +23,8 @@ type PilotoUpdate = Database["public"]["Tables"]["pilotos"]["Update"];
 type ViajeRow = Database["public"]["Tables"]["viajes"]["Row"];
 
 type TabPilotos = "lista" | "viaticos" | "registrar";
+
+const SECCIONES_PILOTOS: readonly TabPilotos[] = ["lista", "viaticos", "registrar"];
 
 interface ResumenViaticos {
   piloto_id: string;
@@ -107,7 +111,23 @@ function IconoPiloto({ size = 28 }: { size?: number }) {
 }
 
 export default function Pilotos() {
-  const [tab, setTab] = useState<TabPilotos>("lista");
+  const { rol, puede } = usePermisos();
+  const puedeLicencia = puede("pilotos.verLicencia");
+  const puedeViaticos = puede("pilotos.verViaticos");
+  const puedeRegistrar = puede("pilotos.registrar");
+  const puedeGestionar = rol === "admin";
+  const [tabSolicitado, setTab] = useState<TabPilotos>(() =>
+    leerSeccionInicial("pilotos", "lista", SECCIONES_PILOTOS),
+  );
+  const tabPermitido =
+    tabSolicitado === "lista" ||
+    (tabSolicitado === "viaticos" && puedeViaticos) ||
+    (tabSolicitado === "registrar" && puedeRegistrar);
+  const tab = tabPermitido ? tabSolicitado : "lista";
+
+  useEffect(() => {
+    sincronizarSeccion("pilotos", tab);
+  }, [tab, tabPermitido]);
 
   const [pilotos, setPilotos] = useState<PilotoRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -212,6 +232,7 @@ export default function Pilotos() {
   }, []);
 
   const handleGuardar = async () => {
+    if (!puedeRegistrar) return;
     setSaveError(null);
     if (!fNombre.trim()) {
       setSaveError("El nombre es obligatorio.");
@@ -253,6 +274,7 @@ export default function Pilotos() {
   };
 
   const actualizarEstadoPiloto = async (id: string, valor: string) => {
+    if (!puedeGestionar) return;
     setActionBusy(true);
     const update: PilotoUpdate = { activo: valor === "true" };
     await supabase.from("pilotos").update(update).eq("id", id);
@@ -262,7 +284,7 @@ export default function Pilotos() {
   };
 
   const handleConfirmarEliminacion = async () => {
-    if (!eliminando) return;
+    if (!eliminando || !puedeGestionar) return;
     setActionBusy(true);
     await supabase.from("pilotos").delete().eq("id", eliminando);
     await refetchPilotos();
@@ -276,6 +298,7 @@ export default function Pilotos() {
   };
 
   const iniciarEdicionPiloto = (piloto: PilotoRow) => {
+    if (!puedeRegistrar) return;
     setEditandoPilotoId(piloto.id);
     setFNombre(piloto.nombre);
     setFTelefono(piloto.telefono ?? "");
@@ -297,12 +320,13 @@ export default function Pilotos() {
 
   const TABS = [
     { id: "lista" as TabPilotos, label: "Pilotos", count: pilotos.length },
-    { id: "viaticos" as TabPilotos, label: "Viáticos" },
-    { id: "registrar" as TabPilotos, label: "+ Registrar piloto" },
+    ...(puedeViaticos ? [{ id: "viaticos" as TabPilotos, label: "Viáticos" }] : []),
+    ...(puedeRegistrar ? [{ id: "registrar" as TabPilotos, label: "+ Registrar piloto" }] : []),
   ];
 
   function CeldaEstado({ p }: { p: PilotoRow }) {
     const isOpen = editando?.id === p.id;
+    if (!puedeGestionar) return <BadgeActivo activo={p.activo} />;
     return (
       <div className="relative inline-block">
         <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
@@ -324,6 +348,7 @@ export default function Pilotos() {
   }
 
   function CeldaAcciones({ p }: { p: PilotoRow }) {
+    if (!puedeGestionar) return null;
     const isDeleting = eliminando === p.id;
     if (isDeleting)
       return (
@@ -427,12 +452,12 @@ export default function Pilotos() {
                   Registra el primer conductor
                 </p>
               </div>
-              <button
+              {puedeRegistrar && <button
                 onClick={() => setTab("registrar")}
                 className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-bold transition-colors cursor-pointer shadow-md shadow-orange-200"
               >
                 + Registrar piloto
-              </button>
+              </button>}
             </div>
           ) : (
             <>
@@ -455,9 +480,8 @@ export default function Pilotos() {
                         {[
                           "Nombre",
                           "Teléfono",
-                          "Licencia",
-                          "Estado",
-                          "Acciones",
+                          ...(puedeLicencia ? ["Licencia"] : []),
+                          ...(puedeGestionar ? ["Estado", "Acciones"] : []),
                         ].map((h) => (
                           <th
                             key={h}
@@ -487,15 +511,8 @@ export default function Pilotos() {
                           <td className="px-4 py-3.5 text-slate-500 tabular-nums">
                             {p.telefono ?? "—"}
                           </td>
-                          <td className="px-4 py-3.5 font-mono text-xs text-slate-500">
-                            {p.licencia ?? "—"}
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <CeldaEstado p={p} />
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <CeldaAcciones p={p} />
-                          </td>
+                          {puedeLicencia && <td className="px-4 py-3.5 font-mono text-xs text-slate-500">{p.licencia ?? "—"}</td>}
+                          {puedeGestionar && <><td className="px-4 py-3.5"><CeldaEstado p={p} /></td><td className="px-4 py-3.5"><CeldaAcciones p={p} /></td></>}
                         </tr>
                       ))}
                     </tbody>
@@ -523,15 +540,13 @@ export default function Pilotos() {
                           )}
                         </div>
                       </div>
-                      <CeldaEstado p={p} />
+                      {puedeGestionar && <CeldaEstado p={p} />}
                     </div>
-                    <p className="text-xs text-slate-500 mb-3">
+                    {puedeLicencia && <p className="text-xs text-slate-500 mb-3">
                       Licencia:{" "}
                       <span className="font-mono">{p.licencia ?? "—"}</span>
-                    </p>
-                    <div className="pt-3 border-t border-slate-100">
-                      <CeldaAcciones p={p} />
-                    </div>
+                    </p>}
+                    {puedeGestionar && <div className="pt-3 border-t border-slate-100"><CeldaAcciones p={p} /></div>}
                   </div>
                 ))}
               </div>

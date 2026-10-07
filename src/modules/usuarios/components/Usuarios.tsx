@@ -6,6 +6,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
+import { MATRIZ_PERMISOS, type Rol } from "@/lib/permisos";
+import { leerSeccionInicial, sincronizarSeccion } from "@/lib/seccion-url";
 import {
   DeleteIcon,
   EditIcon,
@@ -16,8 +19,8 @@ import {
 } from "@/components/shared/InteractiveTableControls";
 
 type TabId = "usuarios" | "roles" | "invitar";
-type Rol = "admin" | "operativo" | "visualizador";
 
+const SECCIONES_USUARIOS: readonly TabId[] = ["usuarios", "roles", "invitar"];
 interface UsuarioUI {
   id: string;
   nombre: string;
@@ -52,7 +55,7 @@ const ROL_CONFIG: Record<
     bg: "bg-slate-100",
     text: "text-slate-700",
     dot: "bg-slate-400",
-    descripcion: "Solo lectura",
+    descripcion: "Piloto: consulta de viajes activos y contactos",
   },
 };
 
@@ -70,88 +73,6 @@ const ROL_OPTIONS: DropdownOption<Rol>[] = (Object.entries(ROL_CONFIG) as [Rol, 
   optionBg: `${config.bg} hover:brightness-95`,
   optionText: config.text,
 }));
-
-// ── Matriz de permisos por rol ────────────────────────────────
-interface Permiso {
-  modulo: string;
-  icono: string;
-  admin: boolean | "parcial";
-  operativo: boolean | "parcial";
-  visualizador: boolean | "parcial";
-}
-
-const PERMISOS: Permiso[] = [
-  {
-    modulo: "Dashboard",
-    icono: "📊",
-    admin: true,
-    operativo: true,
-    visualizador: true,
-  },
-  {
-    modulo: "Ver viajes",
-    icono: "🚛",
-    admin: true,
-    operativo: true,
-    visualizador: true,
-  },
-  {
-    modulo: "Crear / editar viajes",
-    icono: "✏️",
-    admin: true,
-    operativo: true,
-    visualizador: false,
-  },
-  {
-    modulo: "Cambiar estado viaje",
-    icono: "🔄",
-    admin: true,
-    operativo: true,
-    visualizador: false,
-  },
-  {
-    modulo: "Gestión de flota",
-    icono: "🏗️",
-    admin: true,
-    operativo: true,
-    visualizador: "parcial",
-  },
-  {
-    modulo: "Gestión de pilotos",
-    icono: "👤",
-    admin: true,
-    operativo: true,
-    visualizador: false,
-  },
-  {
-    modulo: "GPS y rastreo",
-    icono: "📡",
-    admin: true,
-    operativo: true,
-    visualizador: true,
-  },
-  {
-    modulo: "Alertas",
-    icono: "🔔",
-    admin: true,
-    operativo: true,
-    visualizador: "parcial",
-  },
-  {
-    modulo: "Reportes y exportar",
-    icono: "📄",
-    admin: true,
-    operativo: "parcial",
-    visualizador: false,
-  },
-  {
-    modulo: "Usuarios y seguridad",
-    icono: "🔒",
-    admin: true,
-    operativo: false,
-    visualizador: false,
-  },
-];
 
 // ── Clases de campo ───────────────────────────────────────────
 const inputCls =
@@ -261,11 +182,18 @@ function formatoUltimaSesion(fecha: string | null) {
 
 // ── Componente principal ──────────────────────────────────────
 export default function Usuarios() {
+  const { user } = useAuth();
   const [usuarios, setUsuarios] = useState<UsuarioUI[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabId>("usuarios");
+  const [tab, setTab] = useState<TabId>(() =>
+    leerSeccionInicial("usuarios", "usuarios", SECCIONES_USUARIOS),
+  );
+
+  useEffect(() => {
+    sincronizarSeccion("usuarios", tab);
+  }, [tab]);
 
   // Estado visual de acciones (sin lógica real aún)
   const [estadoAbierto, setEstadoAbierto] = useState<string | null>(null);
@@ -278,6 +206,16 @@ export default function Usuarios() {
   const [fEmail, setFEmail] = useState("");
   const [fPassword, setFPassword] = useState("");
   const [fRol, setFRol] = useState<Rol>("operativo");
+
+  function mensajeErrorRls(error: { code?: string; message: string }) {
+    if (error.code === "42501" || error.message.includes("42501") || error.message.includes("No puedes cambiar tu propio rol")) return "No puedes cambiar tu propio rol ni tu propio estado.";
+    if (error.code === "23514" || error.message.includes("23514") || error.message.includes("Debe existir al menos un administrador activo")) return "Debe existir al menos un administrador activo.";
+    return error.message;
+  }
+
+  function esUltimoAdminActivo(usuario: UsuarioUI) {
+    return usuario.rol === "admin" && usuario.activo && usuarios.filter((item) => item.rol === "admin" && item.activo).length === 1;
+  }
 
   const cargarUsuarios = useCallback(async () => {
     setLoading(true);
@@ -338,14 +276,29 @@ export default function Usuarios() {
   }, [cargarUsuarios]);
 
   async function guardarRol(id: string, rol: Rol) {
+    const usuario = usuarios.find((item) => item.id === id);
+    if (!usuario) return;
+    if (user?.id === id) {
+      setMensaje("No puedes cambiar tu propio rol ni tu propio estado.");
+      return;
+    }
+    if (esUltimoAdminActivo(usuario) && rol !== "admin") {
+      setMensaje("Debe existir al menos un administrador activo.");
+      return;
+    }
     setGuardando(true);
-    const { error: updateError } = await supabase
+    const { data, error: updateError } = await supabase
       .from("profiles")
       .update({ rol })
-      .eq("id", id);
+      .eq("id", id)
+      .select("id");
     setGuardando(false);
     if (updateError) {
-      setMensaje(updateError.message);
+      setMensaje(mensajeErrorRls(updateError));
+      return;
+    }
+    if (!data || data.length === 0) {
+      setMensaje("No tienes permiso para modificar este usuario.");
       return;
     }
     setEditRol(null);
@@ -368,6 +321,15 @@ export default function Usuarios() {
       setMensaje("Completa nombre y correo electrónico.");
       return;
     }
+    const usuario = usuarios.find((item) => item.id === editandoUsuarioId);
+    if (usuario && user?.id === usuario.id && fRol !== usuario.rol) {
+      setMensaje("No puedes cambiar tu propio rol ni tu propio estado.");
+      return;
+    }
+    if (usuario && esUltimoAdminActivo(usuario) && fRol !== "admin") {
+      setMensaje("Debe existir al menos un administrador activo.");
+      return;
+    }
     setGuardando(true);
     setMensaje(null);
     const { data: sessionData } = await supabase.auth.getSession();
@@ -379,7 +341,7 @@ export default function Usuarios() {
     const result = (await response.json()) as { error?: string };
     setGuardando(false);
     if (!response.ok) {
-      setMensaje(result.error ?? "No se pudo actualizar el usuario.");
+      setMensaje(result.error ? mensajeErrorRls({ message: result.error }) : "No se pudo actualizar el usuario.");
       return;
     }
     setEditandoUsuarioId(null);
@@ -409,13 +371,28 @@ export default function Usuarios() {
   }
 
   async function cambiarEstado(usuario: UsuarioUI) {
+    if (user?.id === usuario.id) {
+      setMensaje("No puedes cambiar tu propio rol ni tu propio estado.");
+      setEstadoAbierto(null);
+      return;
+    }
+    if (esUltimoAdminActivo(usuario) && usuario.activo) {
+      setMensaje("Debe existir al menos un administrador activo.");
+      setEstadoAbierto(null);
+      return;
+    }
     setEstadoAbierto(null);
-    const { error: updateError } = await supabase
+    const { data, error: updateError } = await supabase
       .from("profiles")
       .update({ activo: !usuario.activo })
-      .eq("id", usuario.id);
+      .eq("id", usuario.id)
+      .select("id");
     if (updateError) {
-      setMensaje(updateError.message);
+      setMensaje(mensajeErrorRls(updateError));
+      return;
+    }
+    if (!data || data.length === 0) {
+      setMensaje("No tienes permiso para modificar este usuario.");
       return;
     }
     await cargarUsuarios();
@@ -879,7 +856,7 @@ export default function Usuarios() {
                   </tr>
                 </thead>
                 <tbody>
-                  {PERMISOS.map((p, i) => (
+                  {MATRIZ_PERMISOS.map((p, i) => (
                     <tr
                       key={p.modulo}
                       className={`border-b border-slate-50 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
@@ -1034,7 +1011,7 @@ export default function Usuarios() {
                   Permisos del rol {ROL_CONFIG[fRol].label}
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {PERMISOS.filter((p) => p[fRol] !== false).map((p) => (
+                  {MATRIZ_PERMISOS.filter((p) => p[fRol] !== false).map((p) => (
                     <div
                       key={p.modulo}
                       className="flex items-center gap-2 text-xs text-slate-600"

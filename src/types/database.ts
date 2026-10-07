@@ -31,6 +31,8 @@ export type TipoServicioViajeDB = "flete" | "renta";
 export type TipoClienteDB = "directo" | "indirecto";
 export type ModalidadRentaDB = "por_viaje" | "mensual" | "por_dia";
 export type EstadoRentaChasisDB = "activa" | "cerrada" | "cancelada";
+export type TipoReporteDB = "viajes" | "alertas" | "desempeno" | "flota" | "pilotos";
+export type FormatoReporteDB = "pdf" | "excel";
 
 export interface Database {
   public: {
@@ -205,6 +207,85 @@ export interface Database {
           updated_at?: string;
         };
         Relationships: [];
+      };
+
+      config_alertas: {
+        Row: {
+          id: string;
+          tipo: string;
+          umbral_minutos: number | null;
+          radio_metros: number | null;
+          activo: boolean;
+          notificar_telegram: boolean;
+          notificar_email: boolean;
+          notificar_push: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tipo: string;
+          umbral_minutos?: number | null;
+          radio_metros?: number | null;
+          activo?: boolean;
+          notificar_telegram?: boolean;
+          notificar_email?: boolean;
+          notificar_push?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          tipo?: string;
+          umbral_minutos?: number | null;
+          radio_metros?: number | null;
+          activo?: boolean;
+          notificar_telegram?: boolean;
+          notificar_email?: boolean;
+          notificar_push?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      estado_viaje_log: {
+        Row: {
+          id: string;
+          viaje_id: string;
+          estado_desde: EstadoViajeDB;
+          estado_hasta: EstadoViajeDB;
+          cambiado_por: string | null;
+          notas: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          viaje_id: string;
+          estado_desde: EstadoViajeDB;
+          estado_hasta: EstadoViajeDB;
+          cambiado_por?: string | null;
+          notas?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          estado_desde?: EstadoViajeDB;
+          estado_hasta?: EstadoViajeDB;
+          cambiado_por?: string | null;
+          notas?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "estado_viaje_log_viaje_id_fkey";
+            columns: ["viaje_id"];
+            isOneToOne: false;
+            referencedRelation: "viajes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estado_viaje_log_cambiado_por_fkey";
+            columns: ["cambiado_por"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
 
       viajes: {
@@ -569,6 +650,46 @@ export interface Database {
           },
         ];
       };
+
+      reportes: {
+        Row: {
+          id: string;
+          tipo: TipoReporteDB;
+          formato: FormatoReporteDB;
+          rango_inicio: string | null;
+          rango_fin: string | null;
+          parametros: Json | null;
+          generado_por: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tipo: TipoReporteDB;
+          formato: FormatoReporteDB;
+          rango_inicio?: string | null;
+          rango_fin?: string | null;
+          parametros?: Json | null;
+          generado_por?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          tipo?: TipoReporteDB;
+          formato?: FormatoReporteDB;
+          rango_inicio?: string | null;
+          rango_fin?: string | null;
+          parametros?: Json | null;
+          generado_por?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "reportes_generado_por_fkey";
+            columns: ["generado_por"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
 
     Views: Record<string, never>;
@@ -582,6 +703,27 @@ export interface Database {
       stats_viajes: {
         Args: { p_desde?: string; p_hasta?: string };
         Returns: Json;
+      };
+      actualizar_estado_viaje_automatico: {
+        Args: {
+          p_viaje_id: string;
+          p_estado_nuevo: string;
+          p_fecha_timestamp?: string;
+        };
+        Returns: Json;
+      };
+      incrementar_lecturas_fuera_destino: {
+        Args: { p_viaje_id: string };
+        Returns: number;
+      };
+      ultima_posicion_gps: {
+        Args: { p_viaje_id: string };
+        Returns: Array<{
+          lat: number;
+          lng: number;
+          velocidad: number | null;
+          created_at: string;
+        }>;
       };
     };
 

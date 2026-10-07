@@ -14,11 +14,11 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { loading, isAuthenticated } = useAuth();
+  const { loading, profileLoaded, profile, isAuthenticated, signOut } = useAuth();
 
   // ── Mientras se verifica la sesión inicial ─────────────────
   // (solo ocurre en el primer render, dura < 500ms normalmente)
-  if (loading) {
+  if (loading || (isAuthenticated && !profileLoaded)) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -39,6 +39,24 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   // ── Sin sesión: mostrar login ──────────────────────────────
   if (!isAuthenticated) {
     return <LoginPage />;
+  }
+
+  if (!profile || !profile.activo) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 p-8 text-center shadow-sm">
+          <p className="text-lg font-bold text-slate-800">Acceso no disponible</p>
+          <p className="text-sm text-slate-500 mt-2">Contacta al administrador</p>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="mt-6 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white cursor-pointer"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // ── Con sesión: renderizar la app ─────────────────────────

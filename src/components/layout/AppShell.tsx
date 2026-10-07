@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
@@ -18,15 +18,74 @@ import RentaChasis from "@/modules/renta-chasis";
 import Reportes from "@/modules/reportes";
 import { MODULO_HEADERS } from "@/lib/constants";
 import type { ModuloId } from "@/types/ui";
+import { usePermisos } from "@/hooks/usePermisos";
+import AccesoRestringido from "@/components/shared/AccesoRestringido";
+
+const MODULOS_URL: ModuloId[] = [
+  "dashboard",
+  "viajes",
+  "flota",
+  "pilotos",
+  "usuarios",
+  "clientes",
+  "renta-chasis",
+  "alertas",
+  "reportes",
+];
 
 export default function AppShell() {
-  const [modulo, setModulo] = useState<ModuloId>("dashboard");
+  return (
+    <ProtectedRoute>
+      <AppShellContent />
+    </ProtectedRoute>
+  );
+}
+
+function AppShellContent() {
+  const { puedeVerModulo, moduloInicial } = usePermisos();
+  const [modulo, setModulo] = useState<ModuloId>(() => {
+    if (typeof window !== "undefined") {
+      const moduloUrl = new URLSearchParams(window.location.search).get("modulo");
+      if (moduloUrl && MODULOS_URL.includes(moduloUrl as ModuloId)) {
+        return moduloUrl as ModuloId;
+      }
+    }
+    return moduloInicial();
+  });
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationsOpen, setNotifications] = useState(false);
 
+  const moduloPermitido = puedeVerModulo(modulo);
+  const moduloVisible = moduloPermitido ? modulo : moduloInicial();
+
+  useEffect(() => {
+    const moduloUrl = new URLSearchParams(window.location.search).get("modulo");
+    if (!moduloUrl || moduloUrl === moduloVisible) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set("modulo", moduloVisible);
+    params.delete("seccion");
+    params.delete("rentaId");
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}?${params.toString()}`,
+    );
+  }, [modulo, moduloVisible]);
+
+  function cambiarModulo(moduloSiguiente: ModuloId) {
+    setModulo(moduloSiguiente);
+    const params = new URLSearchParams(window.location.search);
+    params.set("modulo", moduloSiguiente);
+    if (moduloSiguiente !== "renta-chasis") {
+      params.delete("seccion");
+      params.delete("rentaId");
+    }
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}?${params.toString()}`);
+  }
+
   function renderModulo() {
-    switch (modulo) {
+    switch (moduloVisible) {
       case "dashboard":
         return <Dashboard />;
       case "viajes":
@@ -48,16 +107,15 @@ export default function AppShell() {
       case "reportes":
         return <Reportes />;
       default:
-        return <Dashboard />;
+        return <AccesoRestringido />;
     }
   }
 
   return (
-    <ProtectedRoute>
-      <div className="flex h-screen bg-slate-100 overflow-hidden">
+    <div className="flex h-screen bg-slate-100 overflow-hidden">
         <Sidebar
-          modulo={modulo}
-          setModulo={setModulo}
+            modulo={moduloVisible}
+            setModulo={cambiarModulo}
           collapsed={collapsed}
           toggle={() => setCollapsed((c) => !c)}
           mobileOpen={mobileOpen}
@@ -65,7 +123,7 @@ export default function AppShell() {
         />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Header
-            titulo={MODULO_HEADERS[modulo]}
+            titulo={MODULO_HEADERS[moduloVisible]}
             onToggleMobile={() => setMobileOpen((v) => !v)}
             onToggleNotifications={() => setNotifications((v) => !v)}
             notificationsOpen={notificationsOpen}
@@ -73,6 +131,5 @@ export default function AppShell() {
           <main className="flex-1 overflow-y-auto">{renderModulo()}</main>
         </div>
       </div>
-    </ProtectedRoute>
   );
 }

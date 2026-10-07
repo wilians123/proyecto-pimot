@@ -14,6 +14,8 @@ import { useStats } from "@/hooks/useStats";
 import { useDashboardOperationalStats } from "@/hooks/useDashboardOperationalStats";
 import { alertaAResumen } from "@/utils/alertaView";
 import { useAuth } from "@/context/AuthContext";
+import { useEffect } from "react";
+import { sincronizarSeccion } from "@/lib/seccion-url";
 
 function formatHora(fecha: string | null) {
   if (!fecha) return "—";
@@ -128,6 +130,9 @@ const IconAlert = () => (
 );
 
 export default function Dashboard() {
+  useEffect(() => {
+    sincronizarSeccion("dashboard", "principal");
+  }, []);
   const { profile } = useAuth();
   const { viajes, loading: viajesLoading } = useViajes();
   const { alertas: alertasActivas, loading: alertasLoading } = useAlertas(true);

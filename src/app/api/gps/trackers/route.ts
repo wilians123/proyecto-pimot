@@ -8,8 +8,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { hasRole } from "@/lib/server-auth";
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: Request): Promise<NextResponse> {
+  if (!(await hasRole(request, ["admin", "operativo", "visualizador"]))) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
   // Usar service role para leer sin depender de cookies de sesión
   const supabaseAdmin = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -15,6 +15,8 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { icons } from "@/lib/constants";
 import type { Database } from "@/types/database";
+import { usePermisos } from "@/hooks/usePermisos";
+import { leerSeccionInicial, sincronizarSeccion } from "@/lib/seccion-url";
 
 // SeguimientoViaje: tarjetas GPS live + modal con MapaFlota. Sin Leaflet inline.
 const SeguimientoViaje = dynamic(
@@ -54,6 +56,8 @@ interface ViajeCompleto extends ViajeRow {
 
 type TabId = "activos" | "historial" | "nuevo";
 type TipoChasis = "propio" | "ajeno";
+
+const SECCIONES_VIAJES: readonly TabId[] = ["activos", "historial", "nuevo"];
 
 const VIATICO_MIN = 200;
 const VIATICO_MAX = 250;
@@ -354,7 +358,32 @@ function TrackerIndicador({
 // COMPONENTE PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
 export default function Viajes() {
-  const [tab, setTab] = useState<TabId>("activos");
+  const { puede } = usePermisos();
+  const puedeCrear = puede("viajes.crear");
+  const puedeEditar = puede("viajes.editar");
+  const puedeCancelar = puede("viajes.cancelar");
+  const puedeEliminar = puede("viajes.eliminar");
+  const puedeHistorial = puede("viajes.verHistorial");
+  const puedeViaticos = puede("viajes.verViaticos");
+  const puedeSeguimiento = puede("viajes.seguimientoEscritura");
+  const [tabSolicitado, setTab] = useState<TabId>(() =>
+    leerSeccionInicial("viajes", "activos", SECCIONES_VIAJES),
+  );
+  const tabPermitido =
+    tabSolicitado === "activos" ||
+    (tabSolicitado === "historial" && puedeHistorial) ||
+    (tabSolicitado === "nuevo" && (puedeCrear || puedeEditar));
+  const tab = tabPermitido ? tabSolicitado : "activos";
+
+  useEffect(() => {
+    sincronizarSeccion("viajes", tab);
+  }, [tab, tabPermitido]);
+
+  const setTabPermitido = useCallback((nextTab: TabId) => {
+    if (nextTab === "historial" && !puedeHistorial) return;
+    if (nextTab === "nuevo" && !puedeCrear && !puedeEditar) return;
+    setTab(nextTab);
+  }, [puedeHistorial, puedeCrear, puedeEditar]);
 
   // ── Listas de viajes ──────────────────────────────────────────
   const [viajesActivos, setViajesActivos] = useState<ViajeCompleto[]>([]);
@@ -391,6 +420,13 @@ export default function Viajes() {
   const [saveOk, setSaveOk] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // ── Edición de viaje ──────────────────────────────────────────
+  // Solo se puede editar cuando estado === "programado".
+  // Al activar la edición se navega al tab "nuevo" con el formulario precargado.
+  const [viajeEditando, setViajeEditando] = useState<ViajeCompleto | null>(
+    null,
+  );
+
   // Derivados del formulario
   const pilotoSelec = pilotos.find((p) => p.id === fPilotoId) ?? null;
   const cabezalSelec = cabezales.find((c) => c.id === fCabezalId) ?? null;
@@ -411,13 +447,6 @@ export default function Viajes() {
   // ── Modal de cancelación ──────────────────────────────────────
   const [mostrarModal, setMostrarModal] = useState(false);
   const [procesandoCancelacion, setProcesandoCancelacion] = useState(false);
-
-  // ── Edición de viaje ──────────────────────────────────────────
-  // Solo se puede editar cuando estado === "programado".
-  // Al activar la edición se navega al tab "nuevo" con el formulario precargado.
-  const [viajeEditando, setViajeEditando] = useState<ViajeCompleto | null>(
-    null,
-  );
 
   // ── Query helper (viajes con relaciones) ─────────────────────
   const SELECT_VIAJE =
@@ -596,6 +625,7 @@ export default function Viajes() {
   // Carga catálogos si no están disponibles aún, luego popula el form.
   const handleEditarViaje = useCallback(
     async (v: ViajeCompleto) => {
+      if (!puedeEditar || v.estado === "cancelado") return;
       setViajeEditando(v);
       setSaveError(null);
       setSaveOk(false);
@@ -632,14 +662,14 @@ export default function Viajes() {
       }
 
       cargarViajeEnFormulario(v, catalogoChasis);
-      setTab("nuevo");
+      setTabPermitido("nuevo");
     },
-    [chasisList, cargarViajeEnFormulario],
+    [chasisList, cargarViajeEnFormulario, puedeEditar, setTabPermitido],
   );
 
   // ── Actualizar estado del viaje ───────────────────────────────
   const handleActualizarEstado = async (estadoDestino: EstadoViaje) => {
-    if (!viajeSelec) return;
+    if (!viajeSelec || !puedeSeguimiento || (estadoDestino === "cancelado" && !puedeCancelar)) return;
 
     setActualizandoEstado(true);
     setErrorEstado(null);
@@ -701,7 +731,8 @@ export default function Viajes() {
 
   // ── Abrir modal o actualizar directo según estado elegido ─────
   const handleConfirmarCambioEstado = () => {
-    if (!nuevoEstado || !viajeSelec) return;
+    if (!nuevoEstado || !viajeSelec || !puedeSeguimiento) return;
+    if (nuevoEstado === "cancelado" && !puedeCancelar) return;
     if (nuevoEstado === "cancelado") {
       setMostrarModal(true);
     } else {
@@ -715,7 +746,7 @@ export default function Viajes() {
   const handleConfirmarCancelacion = async (
     accion: "cancelar" | "eliminar",
   ) => {
-    if (!viajeSelec) return;
+    if (!viajeSelec || (!puedeCancelar && accion === "cancelar") || (!puedeEliminar && accion === "eliminar")) return;
 
     setProcesandoCancelacion(true);
     setErrorEstado(null);
@@ -753,6 +784,8 @@ export default function Viajes() {
 
   // ── Guardar nuevo viaje o actualizar viaje editado ───────────
   const handleGuardarViaje = async () => {
+    if ((viajeEditando && !puedeEditar) || (!viajeEditando && !puedeCrear)) return;
+    if (viajeEditando && viajeEditando.estado === "cancelado") return;
     setSaveError(null);
 
     if (!fPilotoId) {
@@ -836,7 +869,7 @@ export default function Viajes() {
         setSaveOk(false);
         setViajeEditando(null);
         resetForm();
-        setTab("activos");
+        setTabPermitido("activos");
       }, 1400);
       return;
     }
@@ -881,7 +914,7 @@ export default function Viajes() {
     resetForm();
     setTimeout(() => {
       setSaveOk(false);
-      setTab("activos");
+      setTabPermitido("activos");
     }, 1600);
   };
 
@@ -922,14 +955,18 @@ export default function Viajes() {
       ? `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2 })}`
       : "—";
 
+  const siguientesEstadosPermitidos = (estado: EstadoViaje, bloqueado: boolean) =>
+    getSiguientesEstados(estado, bloqueado).filter((s) => s !== "cancelado" || puedeCancelar);
+
   const TABS = [
     {
       id: "activos" as TabId,
       label: "Viajes Activos",
       count: viajesActivos.length,
+      disabled: false,
     },
-    { id: "historial" as TabId, label: "Historial" },
-    { id: "nuevo" as TabId, label: "+ Nuevo Viaje" },
+    { id: "historial" as TabId, label: "Historial", disabled: !puedeHistorial },
+    { id: "nuevo" as TabId, label: "+ Nuevo Viaje", disabled: !puedeCrear && !puedeEditar },
   ];
 
   // ─────────────────────────────────────────────────────────────
@@ -956,8 +993,11 @@ export default function Viajes() {
             {TABS.map((t) => (
               <button
                 key={t.id}
+                type="button"
+                disabled={t.disabled}
+                title={t.disabled ? "No disponible para tu rol" : undefined}
                 onClick={() => {
-                  setTab(t.id);
+                  setTabPermitido(t.id);
                   setViajeSelec(null);
                   setNuevoEstado("");
                   setErrorEstado(null);
@@ -968,7 +1008,7 @@ export default function Viajes() {
                   }
                 }}
                 className={`flex items-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-sm
-                  font-semibold transition-all duration-200 cursor-pointer
+                  font-semibold transition-all duration-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50
                   ${
                     tab === t.id
                       ? t.id === "nuevo"
@@ -1012,12 +1052,7 @@ export default function Viajes() {
                   <p className="text-sm font-semibold text-slate-500">
                     Sin viajes activos
                   </p>
-                  <button
-                    onClick={() => setTab("nuevo")}
-                    className="text-xs font-bold text-orange-600 hover:text-orange-700 cursor-pointer"
-                  >
-                    + Registrar nuevo viaje
-                  </button>
+                  {puedeCrear && <button onClick={() => setTabPermitido("nuevo")} className="text-xs font-bold text-orange-600 hover:text-orange-700 cursor-pointer">+ Registrar nuevo viaje</button>}
                 </div>
               ) : (
                 viajesActivos.map((v) => {
@@ -1116,7 +1151,7 @@ export default function Viajes() {
                     </div>
                     <div className="flex items-center gap-2">
                       {/* Botón Editar — solo visible cuando el viaje aún no ha iniciado */}
-                      {viajeSelec.estado === "programado" &&
+                      {puedeEditar && viajeSelec.estado === "programado" &&
                         !(viajeSelec as ViajeCompleto & { bloqueado?: boolean })
                           .bloqueado && (
                           <button
@@ -1227,7 +1262,7 @@ export default function Viajes() {
                     </div>
 
                     {/* Viático */}
-                    <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    {puedeViaticos && <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
                       <div>
                         <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
                           Viático del viaje
@@ -1242,7 +1277,7 @@ export default function Viajes() {
                           <p>{viajeSelec.piloto.telefono}</p>
                         )}
                       </div>
-                    </div>
+                    </div>}
 
                     {/* Seguimiento GPS — tarjetas de datos live + botón "Ver en mapa" */}
                     <div>
@@ -1297,12 +1332,13 @@ export default function Viajes() {
                             }
                           ).lecturas_inicio_confirm ?? 0
                         }
+                        soloLectura={!puedeSeguimiento}
                         onEstadoCambiado={refetchActivos}
                       />
                     </div>
 
                     {/* ── Cambio de estado ── */}
-                    {getSiguientesEstados(
+                    {puedeSeguimiento && siguientesEstadosPermitidos(
                       viajeSelec.estado,
                       (viajeSelec as ViajeCompleto & { bloqueado?: boolean })
                         .bloqueado ?? false,
@@ -1320,7 +1356,7 @@ export default function Viajes() {
                             className={`flex-1 ${selectCls}`}
                           >
                             <option value="">Cambiar estado a…</option>
-                            {getSiguientesEstados(
+                            {siguientesEstadosPermitidos(
                               viajeSelec.estado,
                               (
                                 viajeSelec as ViajeCompleto & {
@@ -1440,7 +1476,7 @@ export default function Viajes() {
                           "Estado",
                           "Inicio",
                           "Fin",
-                          "Viático",
+                           ...(puedeViaticos ? ["Viático"] : []),
                         ].map((h) => (
                           <th
                             key={h}
@@ -1459,7 +1495,7 @@ export default function Viajes() {
                             key={v.id}
                             className="border-b border-slate-50 hover:bg-orange-50/20 transition-colors cursor-pointer"
                             onClick={() => {
-                              setTab("activos");
+                              setTabPermitido("activos");
                               setViajeSelec(v);
                             }}
                           >
@@ -1490,7 +1526,7 @@ export default function Viajes() {
                             <td className="px-4 py-3.5 text-slate-500 tabular-nums text-xs">
                               {formatFecha(v.fecha_fin)}
                             </td>
-                            <td className="px-4 py-3.5">
+                            {puedeViaticos && <td className="px-4 py-3.5">
                               {v.viatico_monto !== null ? (
                                 <span
                                   className={`font-semibold tabular-nums ${
@@ -1506,14 +1542,14 @@ export default function Viajes() {
                                   —
                                 </span>
                               )}
-                            </td>
+                            </td>}
                           </tr>
                         );
                       })}
                       {viajesHistorial.length === 0 && (
                         <tr>
                           <td
-                            colSpan={7}
+                             colSpan={puedeViaticos ? 7 : 6}
                             className="px-4 py-8 text-center text-slate-400 text-sm"
                           >
                             Sin viajes registrados
@@ -1533,7 +1569,7 @@ export default function Viajes() {
                         key={v.id}
                         className="px-4 py-3.5 hover:bg-slate-50 cursor-pointer"
                         onClick={() => {
-                          setTab("activos");
+                          setTabPermitido("activos");
                           setViajeSelec(v);
                         }}
                       >
@@ -1560,7 +1596,7 @@ export default function Viajes() {
                         </p>
                         <div className="flex justify-between mt-1.5 text-xs text-slate-400">
                           <span>{formatFecha(v.fecha_inicio)}</span>
-                          {v.viatico_monto !== null && (
+                           {puedeViaticos && v.viatico_monto !== null && (
                             <span className="font-semibold text-amber-700">
                               {formatMoneda(v.viatico_monto)}
                             </span>
@@ -1953,7 +1989,7 @@ export default function Viajes() {
                       type="button"
                       onClick={() => {
                         resetForm();
-                        setTab("activos");
+                        setTabPermitido("activos");
                       }}
                       className="sm:w-44 py-3.5 border-2 border-slate-200 text-slate-700
                         rounded-xl font-semibold hover:bg-slate-100 transition-colors

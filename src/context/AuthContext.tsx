@@ -10,9 +10,10 @@ import {
 } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { limpiarUbicacionesGuardadas } from '@/lib/seccion-url'
 
 // ── Tipo del perfil (subset de la tabla profiles) ─────────────
-interface Profile {
+export interface Profile {
   id:         string
   nombre:     string
   rol:        'admin' | 'operativo' | 'visualizador'
@@ -26,6 +27,7 @@ interface AuthContextType {
   session:         Session | null
   profile:         Profile | null
   loading:         boolean           // true mientras se verifica la sesión inicial
+  profileLoaded:    boolean           // true cuando terminó el intento de cargar el perfil
   isAuthenticated: boolean           // true cuando user y session no son null
   signIn:  (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
@@ -37,6 +39,7 @@ const AuthContext = createContext<AuthContextType>({
   session:         null,
   profile:         null,
   loading:         true,
+  profileLoaded:    false,
   isAuthenticated: false,
   signIn:  async () => ({ error: null }),
   signOut: async () => {},
@@ -48,10 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [profileLoaded, setProfileLoaded] = useState(false)
 
   // ── CORRECCIÓN 1: fetchProfile como useCallback, declarado
   // ANTES del useEffect que lo invoca. ──────────────────────────
   const fetchProfile = useCallback(async (userId: string) => {
+    setProfileLoaded(false)
     const { data, error } = await supabase
       .from('profiles')
       .select('id, nombre, rol, activo, avatar_url')
@@ -67,6 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // loading siempre termina aquí, con o sin perfil
     setLoading(false)
+    setProfileLoaded(true)
+  }, [])
+
+  const mostrarLogin = useCallback(() => {
+    limpiarUbicacionesGuardadas()
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(window.history.state, '', '/auth/login')
+    }
   }, [])
 
   // ── CORRECCIÓN 2 y 3: flujo de sesión estabilizado ───────────
@@ -85,6 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         // No hay sesión → loading termina aquí
         setLoading(false)
+        setProfileLoaded(true)
+        mostrarLogin()
       }
     })
 
@@ -100,6 +115,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile(null)
           setLoading(false)
+          setProfileLoaded(true)
+          mostrarLogin()
         }
       }
     )
@@ -108,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [fetchProfile])  // fetchProfile es estable (useCallback sin deps)
+  }, [fetchProfile, mostrarLogin])
 
   // ── signIn: centraliza el login para que LoginPage no importe supabase ──
   const signIn = useCallback(
@@ -123,6 +140,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── signOut ───────────────────────────────────────────────────
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
+    limpiarUbicacionesGuardadas()
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(window.history.state, '', '/auth/login')
+    }
     // El listener onAuthStateChange limpiará user/session/profile
   }, [])
 
@@ -130,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, profile, loading, isAuthenticated, signIn, signOut }}
+      value={{ user, session, profile, loading, profileLoaded, isAuthenticated, signIn, signOut }}
     >
       {children}
     </AuthContext.Provider>
