@@ -60,11 +60,29 @@ const ROL_CONFIG: Record<
 };
 
 const ESTADO_ACTIVO: DropdownOption<"true" | "false">[] = [
-  { value: "true", label: "Activo", bg: "bg-green-100", text: "text-green-800", dot: "bg-green-500", optionBg: "bg-green-50 hover:bg-green-100", optionText: "text-green-800" },
-  { value: "false", label: "Inactivo", bg: "bg-slate-100", text: "text-slate-500", dot: "bg-slate-400", optionBg: "bg-slate-100 hover:bg-slate-200", optionText: "text-slate-600" },
+  {
+    value: "true",
+    label: "Activo",
+    bg: "bg-green-100",
+    text: "text-green-800",
+    dot: "bg-green-500",
+    optionBg: "bg-green-50 hover:bg-green-100",
+    optionText: "text-green-800",
+  },
+  {
+    value: "false",
+    label: "Inactivo",
+    bg: "bg-slate-100",
+    text: "text-slate-500",
+    dot: "bg-slate-400",
+    optionBg: "bg-slate-100 hover:bg-slate-200",
+    optionText: "text-slate-600",
+  },
 ];
 
-const ROL_OPTIONS: DropdownOption<Rol>[] = (Object.entries(ROL_CONFIG) as [Rol, (typeof ROL_CONFIG)[Rol]][]).map(([value, config]) => ({
+const ROL_OPTIONS: DropdownOption<Rol>[] = (
+  Object.entries(ROL_CONFIG) as [Rol, (typeof ROL_CONFIG)[Rol]][]
+).map(([value, config]) => ({
   value,
   label: config.label,
   bg: config.bg,
@@ -198,7 +216,9 @@ export default function Usuarios() {
   // Estado visual de acciones (sin lógica real aún)
   const [estadoAbierto, setEstadoAbierto] = useState<string | null>(null);
   const [editandoRol, setEditRol] = useState<string | null>(null);
-  const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
+  const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(
+    null,
+  );
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [editRolValue, setEditRolValue] = useState<Rol>("operativo");
   const [guardando, setGuardando] = useState(false);
@@ -208,13 +228,28 @@ export default function Usuarios() {
   const [fRol, setFRol] = useState<Rol>("operativo");
 
   function mensajeErrorRls(error: { code?: string; message: string }) {
-    if (error.code === "42501" || error.message.includes("42501") || error.message.includes("No puedes cambiar tu propio rol")) return "No puedes cambiar tu propio rol ni tu propio estado.";
-    if (error.code === "23514" || error.message.includes("23514") || error.message.includes("Debe existir al menos un administrador activo")) return "Debe existir al menos un administrador activo.";
+    if (
+      error.code === "42501" ||
+      error.message.includes("42501") ||
+      error.message.includes("No puedes cambiar tu propio rol")
+    )
+      return "No puedes cambiar tu propio rol ni tu propio estado.";
+    if (
+      error.code === "23514" ||
+      error.message.includes("23514") ||
+      error.message.includes("Debe existir al menos un administrador activo")
+    )
+      return "Debe existir al menos un administrador activo.";
     return error.message;
   }
 
   function esUltimoAdminActivo(usuario: UsuarioUI) {
-    return usuario.rol === "admin" && usuario.activo && usuarios.filter((item) => item.rol === "admin" && item.activo).length === 1;
+    return (
+      usuario.rol === "admin" &&
+      usuario.activo &&
+      usuarios.filter((item) => item.rol === "admin" && item.activo).length ===
+        1
+    );
   }
 
   const cargarUsuarios = useCallback(async () => {
@@ -335,17 +370,32 @@ export default function Usuarios() {
     const { data: sessionData } = await supabase.auth.getSession();
     const response = await fetch("/api/usuarios", {
       method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token ?? ""}` },
-      body: JSON.stringify({ id: editandoUsuarioId, nombre: fNombre, email: fEmail, rol: fRol }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionData.session?.access_token ?? ""}`,
+      },
+      body: JSON.stringify({
+        id: editandoUsuarioId,
+        nombre: fNombre,
+        email: fEmail,
+        rol: fRol,
+      }),
     });
     const result = (await response.json()) as { error?: string };
     setGuardando(false);
     if (!response.ok) {
-      setMensaje(result.error ? mensajeErrorRls({ message: result.error }) : "No se pudo actualizar el usuario.");
+      setMensaje(
+        result.error
+          ? mensajeErrorRls({ message: result.error })
+          : "No se pudo actualizar el usuario.",
+      );
       return;
     }
     setEditandoUsuarioId(null);
-    setFNombre(""); setFEmail(""); setFPassword(""); setFRol("operativo");
+    setFNombre("");
+    setFEmail("");
+    setFPassword("");
+    setFRol("operativo");
     setTab("usuarios");
     await cargarUsuarios();
   }
@@ -356,7 +406,10 @@ export default function Usuarios() {
     const { data: sessionData } = await supabase.auth.getSession();
     const response = await fetch("/api/usuarios", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token ?? ""}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionData.session?.access_token ?? ""}`,
+      },
       body: JSON.stringify({ id: eliminandoId }),
     });
     const result = (await response.json()) as { error?: string };
@@ -400,7 +453,9 @@ export default function Usuarios() {
 
   async function invitarUsuario() {
     if (!fNombre.trim() || !fEmail.trim() || fPassword.length < 8) {
-      setMensaje("Completa nombre, correo y una contraseña de al menos 8 caracteres.");
+      setMensaje(
+        "Completa nombre, correo y una contraseña de al menos 8 caracteres.",
+      );
       return;
     }
 
@@ -447,13 +502,15 @@ export default function Usuarios() {
   const TABS = [
     { id: "usuarios" as TabId, label: "Usuarios", count: usuarios.length },
     { id: "roles" as TabId, label: "Roles y Permisos" },
-    { id: "invitar" as TabId, label: "+ Invitar usuario" },
+    { id: "invitar" as TabId, label: "+ Crear usuario" },
   ];
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-2xl mx-auto">
       {(loading || error || mensaje) && (
-        <p className={`text-sm ${error || mensaje ? "text-red-600" : "text-slate-400"}`}>
+        <p
+          className={`text-sm ${error || mensaje ? "text-red-600" : "text-slate-400"}`}
+        >
           {error ?? mensaje ?? "Cargando usuarios…"}
         </p>
       )}
@@ -517,8 +574,7 @@ export default function Usuarios() {
               },
               {
                 label: "Operativos",
-                valor: usuarios.filter((u) => u.rol === "operativo")
-                  .length,
+                valor: usuarios.filter((u) => u.rol === "operativo").length,
                 color: "text-blue-700",
               },
             ].map(({ label, valor, color }) => (
@@ -622,18 +678,39 @@ export default function Usuarios() {
                         <td className="px-4 py-3.5">
                           {isEditRol ? (
                             <div className="relative inline-block">
-                              <button type="button" className="cursor-pointer" title="Editar rol" onClick={(event) => event.stopPropagation()}>
-                                <EstadoBadge config={ROL_OPTIONS.find((option) => option.value === editRolValue) ?? ROL_OPTIONS[0]} />
+                              <button
+                                type="button"
+                                className="cursor-pointer"
+                                title="Editar rol"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <EstadoBadge
+                                  config={
+                                    ROL_OPTIONS.find(
+                                      (option) => option.value === editRolValue,
+                                    ) ?? ROL_OPTIONS[0]
+                                  }
+                                />
                               </button>
-                              <EstadoDropdown value={editRolValue} options={ROL_OPTIONS} onSelect={(value) => guardarRol(u.id, value)} onClose={() => setEditRol(null)} />
+                              <EstadoDropdown
+                                value={editRolValue}
+                                options={ROL_OPTIONS}
+                                onSelect={(value) => guardarRol(u.id, value)}
+                                onClose={() => setEditRol(null)}
+                              />
                             </div>
                           ) : (
                             <div className="relative inline-block">
-                              <button type="button" className="cursor-pointer" title="Editar rol" onClick={(event) => {
-                                event.stopPropagation();
-                                setEditRol(u.id);
-                                setEditRolValue(u.rol);
-                              }}>
+                              <button
+                                type="button"
+                                className="cursor-pointer"
+                                title="Editar rol"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEditRol(u.id);
+                                  setEditRolValue(u.rol);
+                                }}
+                              >
                                 <EstadoBadge config={rolCfg} />
                               </button>
                             </div>
@@ -643,13 +720,31 @@ export default function Usuarios() {
                         {/* Estado */}
                         <td className="px-4 py-3.5">
                           <div className="relative inline-block">
-                            <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
-                              event.stopPropagation();
-                              setEstadoAbierto(estadoAbierto === u.id ? null : u.id);
-                            }}>
-                              <EstadoBadge config={u.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]} />
+                            <button
+                              type="button"
+                              className="cursor-pointer"
+                              title="Editar estado"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setEstadoAbierto(
+                                  estadoAbierto === u.id ? null : u.id,
+                                );
+                              }}
+                            >
+                              <EstadoBadge
+                                config={
+                                  u.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]
+                                }
+                              />
                             </button>
-                            {estadoAbierto === u.id && <EstadoDropdown value={String(u.activo) as "true" | "false"} options={ESTADO_ACTIVO} onSelect={() => cambiarEstado(u)} onClose={() => setEstadoAbierto(null)} />}
+                            {estadoAbierto === u.id && (
+                              <EstadoDropdown
+                                value={String(u.activo) as "true" | "false"}
+                                options={ESTADO_ACTIVO}
+                                onSelect={() => cambiarEstado(u)}
+                                onClose={() => setEstadoAbierto(null)}
+                              />
+                            )}
                           </div>
                         </td>
 
@@ -662,9 +757,22 @@ export default function Usuarios() {
                         <td className="px-4 py-3.5">
                           {eliminandoId === u.id ? (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-red-600 font-semibold mr-1">¿Eliminar?</span>
-                              <button onClick={eliminarUsuario} disabled={guardando} className="px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-lg cursor-pointer">Confirmar</button>
-                              <button onClick={() => setEliminandoId(null)} className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-100 cursor-pointer">No</button>
+                              <span className="text-xs text-red-600 font-semibold mr-1">
+                                ¿Eliminar?
+                              </span>
+                              <button
+                                onClick={eliminarUsuario}
+                                disabled={guardando}
+                                className="px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-lg cursor-pointer"
+                              >
+                                Confirmar
+                              </button>
+                              <button
+                                onClick={() => setEliminandoId(null)}
+                                className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-100 cursor-pointer"
+                              >
+                                No
+                              </button>
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
@@ -723,20 +831,44 @@ export default function Usuarios() {
                       </div>
                     </div>
                     <div className="relative inline-block">
-                      <button type="button" className="cursor-pointer" title="Editar estado" onClick={(event) => {
-                        event.stopPropagation();
-                        setEstadoAbierto(estadoAbierto === u.id ? null : u.id);
-                      }}>
-                        <EstadoBadge compact config={u.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]} />
+                      <button
+                        type="button"
+                        className="cursor-pointer"
+                        title="Editar estado"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEstadoAbierto(
+                            estadoAbierto === u.id ? null : u.id,
+                          );
+                        }}
+                      >
+                        <EstadoBadge
+                          compact
+                          config={
+                            u.activo ? ESTADO_ACTIVO[0] : ESTADO_ACTIVO[1]
+                          }
+                        />
                       </button>
-                      {estadoAbierto === u.id && <EstadoDropdown value={String(u.activo) as "true" | "false"} options={ESTADO_ACTIVO} onSelect={() => cambiarEstado(u)} onClose={() => setEstadoAbierto(null)} />}
+                      {estadoAbierto === u.id && (
+                        <EstadoDropdown
+                          value={String(u.activo) as "true" | "false"}
+                          options={ESTADO_ACTIVO}
+                          onSelect={() => cambiarEstado(u)}
+                          onClose={() => setEstadoAbierto(null)}
+                        />
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-xs text-slate-500 pb-3 border-b border-slate-100">
-                    <button type="button" className="cursor-pointer" title="Editar rol" onClick={() => {
-                      setEditRol(editandoRol === u.id ? null : u.id);
-                      setEditRolValue(u.rol);
-                    }}>
+                    <button
+                      type="button"
+                      className="cursor-pointer"
+                      title="Editar rol"
+                      onClick={() => {
+                        setEditRol(editandoRol === u.id ? null : u.id);
+                        setEditRolValue(u.rol);
+                      }}
+                    >
                       <EstadoBadge compact config={rolCfg} />
                     </button>
                     <span>Sesión: {u.ultimaSesion ?? "—"}</span>
@@ -744,16 +876,31 @@ export default function Usuarios() {
                   {editandoRol === u.id && (
                     <div className="flex items-center gap-2 pt-3">
                       <div className="relative flex-1">
-                        <button type="button" className="cursor-pointer" title="Editar rol">
-                          <EstadoBadge config={ROL_OPTIONS.find((option) => option.value === editRolValue) ?? ROL_OPTIONS[0]} />
+                        <button
+                          type="button"
+                          className="cursor-pointer"
+                          title="Editar rol"
+                        >
+                          <EstadoBadge
+                            config={
+                              ROL_OPTIONS.find(
+                                (option) => option.value === editRolValue,
+                              ) ?? ROL_OPTIONS[0]
+                            }
+                          />
                         </button>
-                        <EstadoDropdown value={editRolValue} options={ROL_OPTIONS} onSelect={(value) => guardarRol(u.id, value)} onClose={() => setEditRol(null)} />
+                        <EstadoDropdown
+                          value={editRolValue}
+                          options={ROL_OPTIONS}
+                          onSelect={(value) => guardarRol(u.id, value)}
+                          onClose={() => setEditRol(null)}
+                        />
                       </div>
                     </div>
                   )}
                   <div className="flex gap-2 pt-3">
-                     <button
-                       onClick={() => iniciarEdicionUsuario(u)}
+                    <button
+                      onClick={() => iniciarEdicionUsuario(u)}
                       className={`${actionIconButtonClass} text-orange-500 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600`}
                       title="Editar usuario"
                     >
@@ -761,12 +908,29 @@ export default function Usuarios() {
                     </button>
                     {eliminandoId === u.id ? (
                       <>
-                        <span className="flex-1 self-center text-xs text-red-600 font-semibold">¿Eliminar?</span>
-                        <button onClick={eliminarUsuario} disabled={guardando} className="px-3 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-xl cursor-pointer">Confirmar</button>
-                        <button onClick={() => setEliminandoId(null)} className="px-3 py-2 border border-slate-200 text-slate-600 text-xs font-semibold rounded-xl hover:bg-slate-100 cursor-pointer">No</button>
+                        <span className="flex-1 self-center text-xs text-red-600 font-semibold">
+                          ¿Eliminar?
+                        </span>
+                        <button
+                          onClick={eliminarUsuario}
+                          disabled={guardando}
+                          className="px-3 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-xl cursor-pointer"
+                        >
+                          Confirmar
+                        </button>
+                        <button
+                          onClick={() => setEliminandoId(null)}
+                          className="px-3 py-2 border border-slate-200 text-slate-600 text-xs font-semibold rounded-xl hover:bg-slate-100 cursor-pointer"
+                        >
+                          No
+                        </button>
                       </>
                     ) : (
-                      <button onClick={() => setEliminandoId(u.id)} className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`} title="Eliminar usuario">
+                      <button
+                        onClick={() => setEliminandoId(u.id)}
+                        className={`${actionIconButtonClass} text-red-500 hover:bg-red-50 hover:border-red-300 hover:text-red-600`}
+                        title="Eliminar usuario"
+                      >
                         <DeleteIcon />
                       </button>
                     )}
@@ -978,7 +1142,14 @@ export default function Usuarios() {
                   />
                 </Field>
 
-                <Field label={editandoUsuarioId ? "Contraseña inicial (opcional)" : "Contraseña inicial"} required={!editandoUsuarioId}>
+                <Field
+                  label={
+                    editandoUsuarioId
+                      ? "Contraseña inicial (opcional)"
+                      : "Contraseña inicial"
+                  }
+                  required={!editandoUsuarioId}
+                >
                   <input
                     type="password"
                     value={fPassword}
@@ -1079,18 +1250,22 @@ export default function Usuarios() {
                     <path d="M3 8l7-5 7 5v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8z" />
                     <polyline points="9 21 9 13 11 13 11 21" />
                   </svg>
-                  {guardando ? "Guardando…" : editandoUsuarioId ? "Guardar cambios" : "Enviar invitación"}
+                  {guardando
+                    ? "Guardando…"
+                    : editandoUsuarioId
+                      ? "Guardar cambios"
+                      : "Guardar usuario"}
                 </button>
                 <button
                   type="button"
-                   onClick={() => {
-                     setFNombre("");
-                     setFEmail("");
-                     setFPassword("");
-                     setFRol("operativo");
-                     setEditandoUsuarioId(null);
-                     setTab("usuarios");
-                   }}
+                  onClick={() => {
+                    setFNombre("");
+                    setFEmail("");
+                    setFPassword("");
+                    setFRol("operativo");
+                    setEditandoUsuarioId(null);
+                    setTab("usuarios");
+                  }}
                   className="sm:w-44 py-3.5 border-2 border-slate-200 text-slate-700 rounded-xl
                     font-semibold hover:bg-slate-100 transition-colors cursor-pointer text-base"
                 >

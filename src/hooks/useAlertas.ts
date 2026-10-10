@@ -32,6 +32,53 @@ export function useAlertas(soloActivas = false) {
     setAlertas((data as AlertaConViaje[]) ?? [])
   }, [])
 
+  const marcarComoVista = useCallback(async (alertaId: string) => {
+    const { error } = await supabase
+      .from('alertas')
+      .update({ estado: 'vista' })
+      .eq('id', alertaId)
+      .in('estado', ['pendiente', 'enviada'])
+
+    if (error) throw error
+    await refetch()
+  }, [refetch])
+
+  const generarAlertasPrueba = useCallback(async () => {
+    const { error } = await supabase.from('alertas').insert([
+      {
+        tipo: 'inicio_viaje',
+        nivel: 'info',
+        mensaje: '[PRUEBA] El viaje TR-001 inició su recorrido.',
+        estado: 'pendiente',
+        canal_push: false,
+      },
+      {
+        tipo: 'llegada_destino',
+        nivel: 'info',
+        mensaje: '[PRUEBA] El viaje TR-002 llegó a su destino.',
+        estado: 'pendiente',
+        canal_push: false,
+      },
+      {
+        tipo: 'retraso_operativo',
+        nivel: 'advertencia',
+        mensaje: '[PRUEBA] El viaje TR-003 presenta retraso operativo.',
+        estado: 'pendiente',
+        canal_push: false,
+      },
+      {
+        tipo: 'velocidad_excesiva',
+        nivel: 'critico',
+        mensaje: '[PRUEBA] El vehículo TR-004 superó la velocidad permitida.',
+        estado: 'pendiente',
+        canal_push: false,
+      },
+    ])
+
+    if (error) throw error
+    await refetch()
+  }, [refetch])
+
   // ── Carga inicial y suscripción ────────────────────────────
   useEffect(() => {
     let active = true
@@ -58,10 +105,10 @@ export function useAlertas(soloActivas = false) {
     fetchData()
 
     const channel = supabase
-      .channel('alertas-realtime')
+      .channel(`alertas-realtime-${soloActivas ? 'activas' : 'todas'}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'alertas' },
+        { event: '*', schema: 'public', table: 'alertas' },
         () => { if (active) refetch() }
       )
       .subscribe()
@@ -70,7 +117,7 @@ export function useAlertas(soloActivas = false) {
       active = false
       supabase.removeChannel(channel)
     }
-  }, [refetch])
+  }, [refetch, soloActivas])
 
-  return { alertas, loading, refetch }
+  return { alertas, loading, refetch, marcarComoVista, generarAlertasPrueba }
 }

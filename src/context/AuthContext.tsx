@@ -6,11 +6,13 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   type ReactNode,
 } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { limpiarUbicacionesGuardadas } from '@/lib/seccion-url'
+import { desregistrarPush } from '@/lib/push/push-client'
 
 // ── Tipo del perfil (subset de la tabla profiles) ─────────────
 export interface Profile {
@@ -52,27 +54,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [profileLoaded, setProfileLoaded] = useState(false)
+  const currentUserId = useRef<string | null>(null)
 
   // ── CORRECCIÓN 1: fetchProfile como useCallback, declarado
   // ANTES del useEffect que lo invoca. ──────────────────────────
-  const fetchProfile = useCallback(async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string, isMounted: () => boolean) => {
     setProfileLoaded(false)
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, nombre, rol, activo, avatar_url')
-      .eq('id', userId)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, nombre, rol, activo, avatar_url')
+        .eq('id', userId)
+        .single()
 
-    if (!error && data) {
-      setProfile(data as Profile)
-    } else {
-      // El perfil puede no existir si el trigger handle_new_user
-      // aún no lo creó. No es un error fatal.
+      if (!isMounted()) return
+
+      if (!error && data) {
+        setProfile(data as Profile)
+      } else {
+        // El perfil puede no existir si el trigger handle_new_user
+        // aún no lo creó. No es un error fatal.
+        setProfile(null)
+      }
+    } catch {
+      if (!isMounted()) return
       setProfile(null)
+    } finally {
+      if (!isMounted()) return
+      // loading siempre termina aquí, con o sin perfil
+      setLoading(false)
+      setProfileLoaded(true)
     }
-    // loading siempre termina aquí, con o sin perfil
-    setLoading(false)
-    setProfileLoaded(true)
   }, [])
 
   const mostrarLogin = useCallback(() => {
@@ -86,32 +98,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true  // evita setState en componente desmontado
 
-    // Paso 1: leer sesión existente del localStorage (persistida)
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      if (!mounted) return
-      setSession(s)
-      setUser(s?.user ?? null)
-
-      if (s?.user) {
-        // Hay sesión → cargar perfil (setLoading(false) ocurre dentro)
-        fetchProfile(s.user.id)
-      } else {
-        // No hay sesión → loading termina aquí
-        setLoading(false)
-        setProfileLoaded(true)
-        mostrarLogin()
-      }
-    })
-
-    // Paso 2: suscribirse a cambios futuros (login, logout, refresh)
+    // Supabase emite INITIAL_SESSION después de restaurar la sesión
+    // persistida. El registro ocurre antes de cualquier lectura explícita
+    // para que no haya dos flujos compitiendo por el lock de autenticación.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, s) => {
         if (!mounted) return
+        const nextUserId = s?.user?.id ?? null
+        const userChanged = nextUserId !== currentUserId.current
+        currentUserId.current = nextUserId
+
         setSession(s)
         setUser(s?.user ?? null)
 
         if (s?.user) {
-          fetchProfile(s.user.id)
+          if (_event === 'INITIAL_SESSION' || userChanged) {
+            // No llamar APIs de Supabase dentro de onAuthStateChange: el
+            // callback puede ejecutarse mientras supabase-js sostiene su lock
+            // durante un refresh al volver a enfocar la pestaña.
+            setTimeout(() => {
+              if (mounted) void fetchProfile(s.user.id, () => mounted)
+            }, 0)
+          }
         } else {
           setProfile(null)
           setLoading(false)
@@ -139,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── signOut ───────────────────────────────────────────────────
   const signOut = useCallback(async () => {
+    try { await desregistrarPush() } catch {}
     await supabase.auth.signOut()
     limpiarUbicacionesGuardadas()
     if (typeof window !== 'undefined') {

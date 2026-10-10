@@ -107,5 +107,6 @@ export interface HeaderProps {
   titulo: string;
   onToggleMobile: () => void;
   onToggleNotifications: () => void;
+  onNavigateToAlertas: () => void;
   notificationsOpen: boolean;
 }

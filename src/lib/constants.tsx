@@ -383,11 +383,11 @@ export const NAV_ITEMS: Array<{
   { id: "dashboard", label: "Panel Principal", icon: icons.dashboard },
   { id: "viajes", label: "Viajes", icon: icons.truck },
   { id: "alertas", label: "Alertas", icon: icons.bell },
-  { id: "reportes", label: "Análisis y Reportes", icon: icons.chart },
   { id: "flota", label: "Gestión de Flota", icon: icons.flota },
+  { id: "renta-chasis", label: "Renta de Chasis", icon: icons.truck },
   { id: "pilotos", label: "Pilotos y Viáticos", icon: icons.pilot },
   { id: "clientes", label: "Clientes", icon: icons.clientes },
-  { id: "renta-chasis", label: "Renta de Chasis", icon: icons.truck },
+  { id: "reportes", label: "Análisis y Reportes", icon: icons.chart },
   { id: "usuarios", label: "Usuarios y Seguridad", icon: icons.security },
 ];
 

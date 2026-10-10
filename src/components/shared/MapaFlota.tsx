@@ -11,7 +11,7 @@ const ETA_LABEL_STYLE =
     const s = document.createElement("style");
     s.id = "pimot-eta-style";
     s.textContent =
-      ".leaflet-eta-label { background:none !important; border:none !important; box-shadow:none !important; }";
+      ".leaflet-eta-label { background:none !important; border:none !important; box-shadow:none !important; } .leaflet-truck-sat-icon { background:transparent !important; border:0 !important; box-shadow:none !important; padding:0 !important; } .leaflet-truck-sat-icon > div { background:transparent !important; border:0 !important; box-shadow:none !important; padding:0 !important; width:24px !important; height:64px !important; transform-origin:center center; } .leaflet-truck-sat-icon svg { display:block; overflow:visible; }";
     document.head.appendChild(s);
   })();
 void ETA_LABEL_STYLE;
@@ -29,27 +29,17 @@ const COLOR_MOVIMIENTO: Record<string, string> = {
 };
 
 // ── SVG de marcador personalizado ────────────────────────────
-function crearIconoSVG(
-  color: string,
-  encendido: boolean,
-  seleccionado: boolean,
-): string {
-  const strokeColor = seleccionado
-    ? "#F97316"
-    : encendido
-      ? "#FFFFFF"
-      : "#CBD5E1";
-  const strokeWidth = seleccionado ? 3 : 2;
-  const scale = seleccionado ? 1.2 : 1;
-  const w = Math.round(36 * scale);
-  const h = Math.round(44 * scale);
+function crearIconoSVG(): string {
   return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 36 44">
-      <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26S36 31.5 36 18C36 8.06 27.94 0 18 0z"
-        fill="${color}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
-      <circle cx="18" cy="18" r="8" fill="white" opacity="0.92"/>
-      <text x="18" y="22" text-anchor="middle" font-size="11" font-weight="bold"
-        fill="${color}" font-family="system-ui,sans-serif">&#x1F69B;</text>
+    <svg style="width:24px;height:64px" width="24" height="64" viewBox="0 0 24 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="2" width="18" height="38" rx="2" fill="currentColor" stroke="#ffffff" stroke-width="2"/>
+      <line x1="6" y1="10" x2="18" y2="10" stroke="#ffffff" stroke-width="1.5" opacity="0.3"/>
+      <line x1="6" y1="22" x2="18" y2="22" stroke="#ffffff" stroke-width="1.5" opacity="0.3"/>
+      <line x1="6" y1="32" x2="18" y2="32" stroke="#ffffff" stroke-width="1.5" opacity="0.3"/>
+      <rect x="4" y="43" width="16" height="15" rx="3" fill="#1e293b" stroke="#ffffff" stroke-width="2"/>
+      <path d="M6 54H18" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+      <rect x="1" y="46" width="2" height="4" fill="#ffffff" rx="0.5"/>
+      <rect x="21" y="46" width="2" height="4" fill="#ffffff" rx="0.5"/>
     </svg>
   `;
 }
@@ -58,43 +48,50 @@ function crearIconoSVG(
 function crearPopupHTML(tracker: TrackerConCabezal): string {
   const estadoLabel =
     tracker.movimiento === "moving"
-      ? "🟢 En movimiento"
+      ? "En movimiento"
       : tracker.movimiento === "parked"
-        ? "🟡 Estacionado"
-        : "⚪ Sin señal";
+        ? "Estacionado"
+        : tracker.movimiento === "stopped"
+          ? "Detenido"
+          : "Sin señal";
+  const unidadPrincipal = tracker.placa ?? tracker.label;
+  const detalleDispositivo = `Unidad ${tracker.label} · Tracker #${tracker.tracker_id}${tracker.bateria !== null ? ` · Batería ${tracker.bateria}%` : ""}`;
+  const colorMotor = tracker.encendido ? "#10b981" : "#ef4444";
+  const estadoMotor = tracker.encendido ? "Encendido" : "Apagado";
   return `
-    <div style="font-family:system-ui,sans-serif;min-width:190px;padding:4px 2px">
-      <div style="font-weight:700;font-size:14px;color:#1E293B;margin-bottom:8px;
-        padding-bottom:6px;border-bottom:1px solid #E2E8F0">
-        🚛 ${tracker.label}
+    <div style="font-family:system-ui,sans-serif;width:220px;max-width:220px;min-width:0;color:#0f172a;padding:2px 1px;box-sizing:border-box">
+      <div style="padding:1px 2px 6px;border-bottom:1px solid #e2e8f0">
+        <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;font-size:15px;line-height:1.25;color:#0f172a">
+          ${unidadPrincipal}
+        </div>
+        <div style="font-size:10px;line-height:1.3;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          ${detalleDispositivo}
+        </div>
       </div>
-      ${
-        tracker.placa
-          ? `
-        <div style="font-size:12px;color:#475569;margin-bottom:4px">
-          Placa: <strong style="color:#1E293B">${tracker.placa}</strong>
-        </div>`
-          : ""
-      }
-      <div style="font-size:12px;color:#475569;margin-bottom:4px">
-        Velocidad: <strong style="color:#1E293B">${tracker.velocidad} km/h</strong>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0;padding:6px 7px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px">
+        <span style="font-size:11px;color:#64748b">Velocidad Actual</span>
+        <strong style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;line-height:1;font-weight:700;color:#0f172a;white-space:nowrap">
+          ${tracker.velocidad} km/h
+        </strong>
       </div>
-      <div style="font-size:12px;color:#475569;margin-bottom:4px">
-        ${estadoLabel}
+
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0 0 6px">
+        <div style="padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;min-width:0">
+          <div style="font-size:9px;line-height:1.2;letter-spacing:.08em;color:#94a3b8;font-weight:700">MOVIMIENTO</div>
+          <div style="font-size:11px;line-height:1.25;color:#0f172a;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${estadoLabel}
+          </div>
+        </div>
+        <div style="padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;min-width:0">
+          <div style="font-size:9px;line-height:1.2;letter-spacing:.08em;color:#94a3b8;font-weight:700">MOTOR</div>
+          <div style="font-size:11px;line-height:1.25;color:#0f172a;font-weight:600;margin-top:2px;white-space:nowrap">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${colorMotor};margin-right:5px;vertical-align:middle"></span>${estadoMotor}
+          </div>
+        </div>
       </div>
-      <div style="font-size:12px;color:#475569;margin-bottom:4px">
-        Motor: <strong>${tracker.encendido ? "🟢 Encendido" : "🔴 Apagado"}</strong>
-      </div>
-      ${
-        tracker.bateria !== null
-          ? `
-        <div style="font-size:12px;color:#475569;margin-bottom:4px">
-          Batería: <strong style="color:#1E293B">${tracker.bateria}%</strong>
-        </div>`
-          : ""
-      }
-      <div style="font-size:11px;color:#94A3B8;margin-top:6px;padding-top:6px;
-        border-top:1px solid #E2E8F0">
+
+      <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;line-height:1.3;color:#94a3b8;margin-top:4px;padding:5px 2px 0;border-top:1px solid #e2e8f0">
         ${tracker.lat?.toFixed(6)}, ${tracker.lng?.toFixed(6)}
       </div>
     </div>
@@ -135,6 +132,7 @@ export default function MapaFlota({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<number, L.Marker>>(new Map());
+  const ultimoRumboRef = useRef<Map<number, number>>(new Map());
   const mapReadyRef = useRef(false);
   const initStartedRef = useRef(false);
   const highlightCenteredRef = useRef(false);
@@ -324,18 +322,33 @@ export default function MapaFlota({
         const esSeleccionado =
           tracker.tracker_id === trackerSeleccionado ||
           tracker.tracker_id === highlightTrackerId;
-        const svgStr = crearIconoSVG(color, tracker.encendido, esSeleccionado);
-        const iconUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgStr)))}`;
-        const iconSize: [number, number] = esSeleccionado ? [44, 53] : [36, 44];
-        const iconAnchor: [number, number] = esSeleccionado
-          ? [22, 53]
-          : [18, 44];
-
-        const icon = L.icon({
-          iconUrl,
-          iconSize,
-          iconAnchor,
-          popupAnchor: [0, -iconSize[1]],
+        const trackerRumbo = tracker as TrackerConCabezal & {
+          heading?: number;
+          bearing?: number;
+        };
+        const rumboReportado = Number(
+          trackerRumbo.heading ?? trackerRumbo.bearing,
+        );
+        const rumboValido = Number.isFinite(rumboReportado);
+        const estacionado =
+          tracker.velocidad === 0 ||
+          tracker.movimiento === "stopped" ||
+          tracker.movimiento === "parked";
+        if (
+          rumboValido &&
+          (!estacionado || !ultimoRumboRef.current.has(tracker.tracker_id))
+        ) {
+          ultimoRumboRef.current.set(tracker.tracker_id, rumboReportado);
+        }
+        const rumbo = ultimoRumboRef.current.get(tracker.tracker_id) ?? 0;
+        const rotacion = rumbo + 180;
+        const escala = esSeleccionado ? 1.2 : 1;
+        const icon = L.divIcon({
+          html: `<div style="width:24px;height:64px;color:${color};transform:rotate(${rotacion}deg) scale(${escala});transform-origin:center center;">${crearIconoSVG()}</div>`,
+          className: "leaflet-truck-sat-icon",
+          iconSize: [24, 64],
+          iconAnchor: [12, 32],
+          popupAnchor: [0, -32],
         });
 
         const popupHTML = crearPopupHTML(tracker);

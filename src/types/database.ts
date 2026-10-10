@@ -216,8 +216,6 @@ export interface Database {
           umbral_minutos: number | null;
           radio_metros: number | null;
           activo: boolean;
-          notificar_telegram: boolean;
-          notificar_email: boolean;
           notificar_push: boolean;
           updated_at: string;
         };
@@ -227,8 +225,6 @@ export interface Database {
           umbral_minutos?: number | null;
           radio_metros?: number | null;
           activo?: boolean;
-          notificar_telegram?: boolean;
-          notificar_email?: boolean;
           notificar_push?: boolean;
           updated_at?: string;
         };
@@ -237,8 +233,6 @@ export interface Database {
           umbral_minutos?: number | null;
           radio_metros?: number | null;
           activo?: boolean;
-          notificar_telegram?: boolean;
-          notificar_email?: boolean;
           notificar_push?: boolean;
           updated_at?: string;
         };
@@ -428,8 +422,6 @@ export interface Database {
           nivel: NivelAlertaDB;
           mensaje: string;
           estado: EstadoAlertaDB;
-          canal_telegram: boolean;
-          canal_email: boolean;
           canal_push: boolean;
           created_at: string;
           updated_at: string;
@@ -441,8 +433,6 @@ export interface Database {
           nivel?: NivelAlertaDB;
           mensaje: string;
           estado?: EstadoAlertaDB;
-          canal_telegram?: boolean;
-          canal_email?: boolean;
           canal_push?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -453,8 +443,6 @@ export interface Database {
           nivel?: NivelAlertaDB;
           mensaje?: string;
           estado?: EstadoAlertaDB;
-          canal_telegram?: boolean;
-          canal_email?: boolean;
           canal_push?: boolean;
           updated_at?: string;
         };
@@ -690,6 +678,75 @@ export interface Database {
           },
         ];
       };
+
+      dispositivos_push: {
+        Row: {
+          id: string;
+          user_id: string;
+          token: string;
+          plataforma: string;
+          user_agent: string | null;
+          activo: boolean;
+          ultimo_uso: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          token: string;
+          plataforma: string;
+          user_agent?: string | null;
+          activo?: boolean;
+          ultimo_uso?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          token?: string;
+          plataforma?: string;
+          user_agent?: string | null;
+          activo?: boolean;
+          ultimo_uso?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
+      notificaciones_push_log: {
+        Row: {
+          id: string;
+          alerta_id: string;
+          dispositivo_id: string | null;
+          user_id: string | null;
+          plataforma: string | null;
+          estado: string;
+          fcm_message_id: string | null;
+          error: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          alerta_id: string;
+          dispositivo_id?: string | null;
+          user_id?: string | null;
+          plataforma?: string | null;
+          estado: string;
+          fcm_message_id?: string | null;
+          error?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          dispositivo_id?: string | null;
+          user_id?: string | null;
+          plataforma?: string | null;
+          estado?: string;
+          fcm_message_id?: string | null;
+          error?: string | null;
+        };
+        Relationships: [];
+      };
     };
 
     Views: Record<string, never>;
@@ -724,6 +781,10 @@ export interface Database {
           velocidad: number | null;
           created_at: string;
         }>;
+      };
+      registrar_dispositivo_push: {
+        Args: { p_token: string; p_plataforma: string; p_user_agent?: string };
+        Returns: string;
       };
     };
 

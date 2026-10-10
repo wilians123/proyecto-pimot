@@ -126,6 +126,7 @@ function AppShellContent() {
             titulo={MODULO_HEADERS[moduloVisible]}
             onToggleMobile={() => setMobileOpen((v) => !v)}
             onToggleNotifications={() => setNotifications((v) => !v)}
+            onNavigateToAlertas={() => cambiarModulo("alertas")}
             notificationsOpen={notificationsOpen}
           />
           <main className="flex-1 overflow-y-auto">{renderModulo()}</main>

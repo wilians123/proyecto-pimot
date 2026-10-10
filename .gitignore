@@ -52,3 +52,5 @@ prompts/
 
 #Auditoria de seguridad
 SECURITY_AUDIT.md
+*firebase-adminsdk*.json
+.env*.local

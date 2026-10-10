@@ -14,7 +14,8 @@ import type { Database, ModalidadRentaDB } from "@/types/database";
 
 type ChasisRow = Database["public"]["Tables"]["chasis"]["Row"];
 type ClienteRow = Database["public"]["Tables"]["clientes"]["Row"];
-type RentaChasisUpdate = Database["public"]["Tables"]["rentas_chasis"]["Update"];
+type RentaChasisUpdate =
+  Database["public"]["Tables"]["rentas_chasis"]["Update"];
 type EstadoFiltro = "activa" | "cerrada" | "cancelada" | "todas";
 type AccionRenta = "cerrar" | "cancelar";
 type VistaRenta = "rentas" | "historial" | "nueva";
@@ -34,16 +35,24 @@ function leerUbicacionInicial(): { vista: VistaRenta; rentaId: string | null } {
     }
   }
   const vistaParam = params.get("seccion");
-  const vistaDesdeUrl = vistaParam === "rentas" || vistaParam === "historial" || vistaParam === "nueva"
-    ? vistaParam
-    : null;
-  const vista: VistaRenta = vistaDesdeUrl
-    ?? (respaldo.vista === "rentas" || respaldo.vista === "historial" || respaldo.vista === "nueva"
+  const vistaDesdeUrl =
+    vistaParam === "rentas" ||
+    vistaParam === "historial" ||
+    vistaParam === "nueva"
+      ? vistaParam
+      : null;
+  const vista: VistaRenta =
+    vistaDesdeUrl ??
+    (respaldo.vista === "rentas" ||
+    respaldo.vista === "historial" ||
+    respaldo.vista === "nueva"
       ? respaldo.vista
       : "rentas");
   return {
     vista,
-    rentaId: vistaDesdeUrl ? params.get("rentaId") : params.get("rentaId") ?? respaldo.rentaId ?? null,
+    rentaId: vistaDesdeUrl
+      ? params.get("rentaId")
+      : (params.get("rentaId") ?? respaldo.rentaId ?? null),
   };
 }
 
@@ -155,12 +164,16 @@ export default function RentaChasis() {
   const [chasis, setChasis] = useState<ChasisRow[]>([]);
   const [clientes, setClientes] = useState<ClienteRow[]>([]);
   const [vista, setVista] = useState<VistaRenta>(ubicacionInicial.vista);
-  const [rentaId, setRentaId] = useState<string | null>(ubicacionInicial.rentaId);
+  const [rentaId, setRentaId] = useState<string | null>(
+    ubicacionInicial.rentaId,
+  );
   const [filtro, setFiltro] = useState<EstadoFiltro>(
     ubicacionInicial.vista === "historial" ? "todas" : "activa",
   );
   const [seccion, setSeccion] = useState<"rentas" | "catalogo">("rentas");
-  const [mostrarFormulario, setMostrarFormulario] = useState(ubicacionInicial.vista === "nueva");
+  const [mostrarFormulario, setMostrarFormulario] = useState(
+    ubicacionInicial.vista === "nueva",
+  );
   const [rentaEditando, setRentaEditando] =
     useState<RentaChasisConRelaciones | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -252,7 +265,11 @@ export default function RentaChasis() {
     if (rentaId) params.set("rentaId", rentaId);
     const query = params.toString();
     if (window.location.search.slice(1) !== query) {
-      window.history.replaceState(window.history.state, "", `${pathname}?${query}`);
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${pathname}?${query}`,
+      );
     }
   }, [pathname, rentaId, vista]);
 
@@ -366,14 +383,23 @@ export default function RentaChasis() {
     };
   }, [rentaId, rentaEditando, rentas]);
 
-  function cambiarEstadoInline(renta: RentaChasisConRelaciones, estado: "activa" | "cerrada") {
+  function cambiarEstadoInline(
+    renta: RentaChasisConRelaciones,
+    estado: "activa" | "cerrada",
+  ) {
     setEstadoAbierto(null);
     if (estado === "cerrada" && renta.estado === "activa") {
       setConfirmando({ id: renta.id, accion: "cerrar" });
     }
   }
 
-  function EstadoRenta({ renta, soloConsulta = false }: { renta: RentaChasisConRelaciones; soloConsulta?: boolean }) {
+  function EstadoRenta({
+    renta,
+    soloConsulta = false,
+  }: {
+    renta: RentaChasisConRelaciones;
+    soloConsulta?: boolean;
+  }) {
     const config = estadoConfig(renta.estado);
     const abierto = estadoAbierto === renta.id;
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -381,14 +407,19 @@ export default function RentaChasis() {
       setEstadoAbierto(abierto ? null : renta.id);
       if (!abierto) {
         requestAnimationFrame(() => {
-          buttonRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+          buttonRef.current?.scrollIntoView({
+            block: "center",
+            behavior: "smooth",
+          });
         });
       }
     };
     return (
       <div className="relative inline-block">
         {soloConsulta ? (
-          <span className={`inline-flex w-full min-w-full max-w-full justify-center items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-semibold whitespace-nowrap ${config.bg} ${config.text}`}>
+          <span
+            className={`inline-flex w-full min-w-full max-w-full justify-center items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-semibold whitespace-nowrap ${config.bg} ${config.text}`}
+          >
             <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
             {config.label}
           </span>
@@ -403,14 +434,20 @@ export default function RentaChasis() {
             aria-expanded={abierto}
             aria-haspopup="listbox"
           >
-            <span className={`inline-flex w-full min-w-full max-w-full justify-center items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-semibold whitespace-nowrap ${config.bg} ${config.text}`}>
+            <span
+              className={`inline-flex w-full min-w-full max-w-full justify-center items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-semibold whitespace-nowrap ${config.bg} ${config.text}`}
+            >
               <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
               {config.label}
             </span>
           </button>
         )}
         {!soloConsulta && abierto && (
-          <div role="listbox" aria-label="Estados de la renta" className="absolute left-0 top-full z-20 mt-2 min-w-32 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          <div
+            role="listbox"
+            aria-label="Estados de la renta"
+            className="absolute left-0 top-full z-20 mt-2 min-w-32 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+          >
             {(["activa", "cerrada"] as const).map((estado) => (
               <button
                 type="button"
@@ -421,7 +458,9 @@ export default function RentaChasis() {
                 disabled={renta.estado === "cerrada" && estado === "activa"}
                 className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 ${estado === "activa" ? "text-emerald-700" : "text-red-700"}`}
               >
-                <span className={`mr-2 h-1.5 w-1.5 rounded-full ${estado === "activa" ? "bg-emerald-500" : "bg-red-500"}`} />
+                <span
+                  className={`mr-2 h-1.5 w-1.5 rounded-full ${estado === "activa" ? "bg-emerald-500" : "bg-red-500"}`}
+                />
                 {estado === "activa" ? "Activa" : "Cerrada"}
               </button>
             ))}
@@ -436,14 +475,18 @@ export default function RentaChasis() {
     if (confirmandoEsta) {
       return (
         <div className="flex items-center gap-2">
-          <span className="text-xs text-red-600 font-semibold mr-1">¿Eliminar?</span>
+          <span className="text-xs text-red-600 font-semibold mr-1">
+            ¿Eliminar?
+          </span>
           <button
             type="button"
             onClick={ejecutarAccion}
             disabled={guardando}
             className="flex items-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
           >
-            {guardando && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {guardando && (
+              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            )}
             Confirmar
           </button>
           <button
@@ -584,14 +627,18 @@ export default function RentaChasis() {
               }}
               className={`flex items-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer ${mostrarFormulario ? "bg-orange-500 text-white shadow-md" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"}`}
             >
-              Nueva Renta
+              + Nueva Renta
             </button>
           </div>
         </div>
       </div>
 
       {mensaje && (
-        <div role="status" aria-live="polite" className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-800">
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-800"
+        >
           {mensaje}
         </div>
       )}
@@ -606,7 +653,9 @@ export default function RentaChasis() {
             >
               <div className="bg-linear-to-r from-slate-800 to-slate-900 px-6 md:px-8 py-5">
                 <h3 className="font-bold text-white text-xl text-center">
-                  {rentaEditando ? "Editar Renta de Chasis" : "Registrar Renta de Chasis"}
+                  {rentaEditando
+                    ? "Editar Renta de Chasis"
+                    : "Registrar Renta de Chasis"}
                 </h3>
                 <p className="text-slate-400 text-sm mt-1 text-center">
                   {rentaEditando
@@ -615,290 +664,312 @@ export default function RentaChasis() {
                 </p>
               </div>
               <div className="p-6 md:p-8 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-                <label className="text-sm font-semibold text-slate-700">
-                  Chasis disponible
-                  <select
-                    className={`${inputClass} mt-1`}
-                    value={form.chasis_id}
-                    onChange={(e) =>
-                      setForm({ ...form, chasis_id: e.target.value })
-                    }
-                    disabled={Boolean(rentaEditando)}
-                    required
-                  >
-                    <option value="">Seleccionar…</option>
-                    {rentaEditando?.chasis &&
-                      !chasis.some((item) => item.id === rentaEditando.chasis_id) && (
-                        <option value={rentaEditando.chasis_id}>
-                          {rentaEditando.chasis.placa} · {rentaEditando.chasis.tamaño}&apos;
-                        </option>
-                      )}
-                    {chasis.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.placa} · {item.tamaño}&apos;
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-semibold text-slate-700">
-                  Cliente
-                  <select
-                    className={`${inputClass} mt-1`}
-                    value={form.cliente_id}
-                    onChange={(e) =>
-                      setForm({ ...form, cliente_id: e.target.value })
-                    }
-                    disabled={Boolean(rentaEditando)}
-                    required
-                  >
-                    <option value="">Seleccionar…</option>
-                    {clientes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm font-semibold text-slate-700">
-                  Tipo de renta
-                  <select
-                    className={`${inputClass} mt-1`}
-                    value={form.tipo_renta_id}
-                    onChange={(e) =>
-                      setForm({ ...form, tipo_renta_id: e.target.value })
-                    }
-                    disabled={Boolean(rentaEditando)}
-                    required
-                  >
-                    <option value="">Seleccionar…</option>
-                    {tipos
-                      .filter((tipo) => tipo.activo)
-                      .map((item) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+                  <label className="text-sm font-semibold text-slate-700">
+                    Chasis disponible
+                    <select
+                      className={`${inputClass} mt-1`}
+                      value={form.chasis_id}
+                      onChange={(e) =>
+                        setForm({ ...form, chasis_id: e.target.value })
+                      }
+                      disabled={Boolean(rentaEditando)}
+                      required
+                    >
+                      <option value="">Seleccionar…</option>
+                      {rentaEditando?.chasis &&
+                        !chasis.some(
+                          (item) => item.id === rentaEditando.chasis_id,
+                        ) && (
+                          <option value={rentaEditando.chasis_id}>
+                            {rentaEditando.chasis.placa} ·{" "}
+                            {rentaEditando.chasis.tamaño}&apos;
+                          </option>
+                        )}
+                      {chasis.map((item) => (
                         <option key={item.id} value={item.id}>
-                          {tipoRentaTexto(item.nombre, item.modalidad)}
+                          {item.placa} · {item.tamaño}&apos;
                         </option>
                       ))}
-                  </select>
-                </label>
-                <label className="text-sm font-semibold text-slate-700">
-                  Fecha de inicio
-                  <input
-                    className={`${inputClass} mt-1`}
-                    type="date"
-                    value={form.fecha_inicio}
-                    onChange={(e) =>
-                      setForm({ ...form, fecha_inicio: e.target.value })
-                    }
-                    disabled={Boolean(rentaEditando)}
-                    required
-                  />
-                </label>
-                <label className="text-sm font-semibold text-slate-700">
-                  Fecha de fin (opcional)
-                  <input
-                    className={`${inputClass} mt-1`}
-                    type="date"
-                    min={form.fecha_inicio}
-                    value={form.fecha_fin}
-                    onChange={(e) =>
-                      setForm({ ...form, fecha_fin: e.target.value })
-                    }
-                  />
-                </label>
-                <label className="text-sm font-semibold text-slate-700">
-                  Días extra
-                  <input
-                    className={`${inputClass} mt-1`}
-                    type="number"
-                    min="0"
-                    value={form.dias_extra}
-                    onChange={(e) =>
-                      setForm({ ...form, dias_extra: e.target.value })
-                    }
-                    disabled={tipoSeleccionado?.modalidad === "por_dia"}
-                  />
-                </label>
-                <label className="text-sm font-semibold text-slate-700 md:col-span-2">
-                  Notas
-                  <input
-                    className={`${inputClass} mt-1`}
-                    value={form.notas}
-                    onChange={(e) =>
-                      setForm({ ...form, notas: e.target.value })
-                    }
-                    placeholder="Observaciones opcionales"
-                  />
-                </label>
-              </div>
-              {tipoSeleccionado && (
-                <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600 flex flex-wrap gap-x-5 gap-y-1">
-                  <span>
-                    Base: <b>{money(tipoSeleccionado.precio_base)}</b>
-                  </span>
-                  <span>
-                    Días incluidos: <b>{tipoSeleccionado.dias_incluidos}</b>
-                  </span>
-                  <span>
-                    Preview:{" "}
-                    <b className="text-orange-600">{money(costoPreview)}</b>
-                  </span>
-                  {tipoSeleccionado.modalidad === "por_dia" &&
-                    form.fecha_fin && <span>{dias} días calculados</span>}
+                    </select>
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    Cliente
+                    <select
+                      className={`${inputClass} mt-1`}
+                      value={form.cliente_id}
+                      onChange={(e) =>
+                        setForm({ ...form, cliente_id: e.target.value })
+                      }
+                      disabled={Boolean(rentaEditando)}
+                      required
+                    >
+                      <option value="">Seleccionar…</option>
+                      {clientes.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    Tipo de renta
+                    <select
+                      className={`${inputClass} mt-1`}
+                      value={form.tipo_renta_id}
+                      onChange={(e) =>
+                        setForm({ ...form, tipo_renta_id: e.target.value })
+                      }
+                      disabled={Boolean(rentaEditando)}
+                      required
+                    >
+                      <option value="">Seleccionar…</option>
+                      {tipos
+                        .filter((tipo) => tipo.activo)
+                        .map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {tipoRentaTexto(item.nombre, item.modalidad)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    Fecha de inicio
+                    <input
+                      className={`${inputClass} mt-1`}
+                      type="date"
+                      value={form.fecha_inicio}
+                      onChange={(e) =>
+                        setForm({ ...form, fecha_inicio: e.target.value })
+                      }
+                      disabled={Boolean(rentaEditando)}
+                      required
+                    />
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    Fecha de fin (opcional)
+                    <input
+                      className={`${inputClass} mt-1`}
+                      type="date"
+                      min={form.fecha_inicio}
+                      value={form.fecha_fin}
+                      onChange={(e) =>
+                        setForm({ ...form, fecha_fin: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    Días extra
+                    <input
+                      className={`${inputClass} mt-1`}
+                      type="number"
+                      min="0"
+                      value={form.dias_extra}
+                      onChange={(e) =>
+                        setForm({ ...form, dias_extra: e.target.value })
+                      }
+                      disabled={tipoSeleccionado?.modalidad === "por_dia"}
+                    />
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700 md:col-span-2">
+                    Notas
+                    <input
+                      className={`${inputClass} mt-1`}
+                      value={form.notas}
+                      onChange={(e) =>
+                        setForm({ ...form, notas: e.target.value })
+                      }
+                      placeholder="Observaciones opcionales"
+                    />
+                  </label>
                 </div>
-              )}
-              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="submit"
-                  disabled={guardando}
-                  className="flex-1 py-3.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-base rounded-xl font-bold transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {guardando ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      {rentaEditando ? "Guardando cambios…" : "Guardando…"}
-                    </>
-                  ) : (
-                    <>{rentaEditando ? "Guardar cambios" : "Crear renta"}</>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={rentaEditando ? cancelarEdicion : () => {
-                    setMostrarFormulario(false);
-                    setVista("rentas");
-                    setRentaId(null);
-                    setMensaje(null);
-                  }}
-                  disabled={guardando}
-                  className="sm:w-44 py-3.5 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-100 transition-colors cursor-pointer text-base disabled:cursor-not-allowed"
-                >
-                  Cancelar
-                </button>
-              </div>
+                {tipoSeleccionado && (
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600 flex flex-wrap gap-x-5 gap-y-1">
+                    <span>
+                      Base: <b>{money(tipoSeleccionado.precio_base)}</b>
+                    </span>
+                    <span>
+                      Días incluidos: <b>{tipoSeleccionado.dias_incluidos}</b>
+                    </span>
+                    <span>
+                      Preview:{" "}
+                      <b className="text-orange-600">{money(costoPreview)}</b>
+                    </span>
+                    {tipoSeleccionado.modalidad === "por_dia" &&
+                      form.fecha_fin && <span>{dias} días calculados</span>}
+                  </div>
+                )}
+                <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="submit"
+                    disabled={guardando}
+                    className="flex-1 py-3.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-base rounded-xl font-bold transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {guardando ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        {rentaEditando ? "Guardando cambios…" : "Guardando…"}
+                      </>
+                    ) : (
+                      <>{rentaEditando ? "Guardar cambios" : "Crear renta"}</>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={
+                      rentaEditando
+                        ? cancelarEdicion
+                        : () => {
+                            setMostrarFormulario(false);
+                            setVista("rentas");
+                            setRentaId(null);
+                            setMensaje(null);
+                          }
+                    }
+                    disabled={guardando}
+                    className="sm:w-44 py-3.5 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-100 transition-colors cursor-pointer text-base disabled:cursor-not-allowed"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </form>
           )}
 
-          {vista !== "nueva" && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            {loading ? (
-              <p className="p-8 text-center text-sm text-slate-400">
-                Cargando rentas…
-              </p>
-            ) : error ? (
-              <p className="p-8 text-center text-sm text-red-600">{error}</p>
-            ) : rentasFiltradas.length === 0 ? (
-              <p className="p-8 text-center text-sm text-slate-400">
-                No hay rentas para este filtro.
-              </p>
-            ) : (
-              <>
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        {[
-                          "Chasis",
-                          "Cliente",
-                          "Tipo",
-                          "Fechas",
-                          "Costo",
-                          "Estado",
-                          ...(esHistorial ? [] : ["Acciones"]),
-                        ].map((header) => (
-                          <th
-                            key={header}
-                            className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500"
+          {vista !== "nueva" && (
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {loading ? (
+                <p className="p-8 text-center text-sm text-slate-400">
+                  Cargando rentas…
+                </p>
+              ) : error ? (
+                <p className="p-8 text-center text-sm text-red-600">{error}</p>
+              ) : rentasFiltradas.length === 0 ? (
+                <p className="p-8 text-center text-sm text-slate-400">
+                  No hay rentas para este filtro.
+                </p>
+              ) : (
+                <>
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          {[
+                            "Chasis",
+                            "Cliente",
+                            "Tipo",
+                            "Fechas",
+                            "Costo",
+                            "Estado",
+                            ...(esHistorial ? [] : ["Acciones"]),
+                          ].map((header) => (
+                            <th
+                              key={header}
+                              className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500"
+                            >
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rentasFiltradas.map((renta) => (
+                          <tr
+                            key={renta.id}
+                            className="border-t border-slate-100"
                           >
-                            {header}
-                          </th>
+                            <td className="px-4 py-3 font-bold text-slate-800">
+                              {renta.chasis?.placa ?? "—"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">
+                              {renta.cliente?.nombre ?? "—"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">
+                              {renta.tipo_renta
+                                ? tipoRentaTexto(
+                                    renta.tipo_renta.nombre,
+                                    renta.tipo_renta.modalidad,
+                                  )
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                              {renta.fecha_inicio} →{" "}
+                              {renta.fecha_fin ?? "Abierta"}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
+                              {money(renta.costo_total)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <EstadoRenta
+                                renta={renta}
+                                soloConsulta={esHistorial}
+                              />
+                            </td>
+                            {!esHistorial && (
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <AccionesRenta renta={renta} />
+                              </td>
+                            )}
+                          </tr>
                         ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rentasFiltradas.map((renta) => (
-                        <tr
-                          key={renta.id}
-                          className="border-t border-slate-100"
-                        >
-                          <td className="px-4 py-3 font-bold text-slate-800">
-                            {renta.chasis?.placa ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 text-slate-600">
-                            {renta.cliente?.nombre ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 text-slate-600">
-                            {renta.tipo_renta
-                              ? tipoRentaTexto(renta.tipo_renta.nombre, renta.tipo_renta.modalidad)
-                              : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="md:hidden space-y-3 p-3">
+                    {rentasFiltradas.map((renta) => (
+                      <div
+                        key={renta.id}
+                        className="rounded-xl border border-slate-100 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-slate-800">
+                              {renta.chasis?.placa ?? "—"}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {renta.cliente?.nombre ?? "—"}
+                            </p>
+                          </div>
+                          <EstadoRenta
+                            renta={renta}
+                            soloConsulta={esHistorial}
+                          />
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                          <span>
+                            Tipo:{" "}
+                            <b className="text-slate-700">
+                              {renta.tipo_renta
+                                ? tipoRentaTexto(
+                                    renta.tipo_renta.nombre,
+                                    renta.tipo_renta.modalidad,
+                                  )
+                                : "—"}
+                            </b>
+                          </span>
+                          <span>
+                            Costo:{" "}
+                            <b className="text-slate-700">
+                              {money(renta.costo_total)}
+                            </b>
+                          </span>
+                          <span className="col-span-2">
                             {renta.fecha_inicio} →{" "}
                             {renta.fecha_fin ?? "Abierta"}
-                          </td>
-                          <td className="px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
-                            {money(renta.costo_total)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <EstadoRenta renta={renta} soloConsulta={esHistorial} />
-                          </td>
-                          {!esHistorial && (
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <AccionesRenta renta={renta} />
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="md:hidden space-y-3 p-3">
-                  {rentasFiltradas.map((renta) => (
-                    <div
-                      key={renta.id}
-                      className="rounded-xl border border-slate-100 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-bold text-slate-800">
-                            {renta.chasis?.placa ?? "—"}
-                          </p>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {renta.cliente?.nombre ?? "—"}
-                          </p>
+                          </span>
                         </div>
-                        <EstadoRenta renta={renta} soloConsulta={esHistorial} />
+                        {!esHistorial && (
+                          <div className="mt-3 border-t border-slate-100 pt-3">
+                            <AccionesRenta renta={renta} />
+                          </div>
+                        )}
                       </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
-                        <span>
-                          Tipo:{" "}
-                          <b className="text-slate-700">
-                            {renta.tipo_renta
-                              ? tipoRentaTexto(renta.tipo_renta.nombre, renta.tipo_renta.modalidad)
-                              : "—"}
-                          </b>
-                        </span>
-                        <span>
-                          Costo:{" "}
-                          <b className="text-slate-700">
-                            {money(renta.costo_total)}
-                          </b>
-                        </span>
-                        <span className="col-span-2">
-                          {renta.fecha_inicio} → {renta.fecha_fin ?? "Abierta"}
-                        </span>
-                      </div>
-                      {!esHistorial && (
-                        <div className="mt-3 border-t border-slate-100 pt-3">
-                          <AccionesRenta renta={renta} />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>}
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <section className="space-y-4">

@@ -124,7 +124,7 @@ export async function exportarExcel({ datos, desde, hasta, usuario }: Exportacio
 
   const alertas = workbook.addWorksheet("Alertas");
   agregarEncabezado(alertas, ["Fecha", "Tipo", "Nivel", "Estado", "Mensaje", "Canales"]);
-  datos.alertas.forEach((alerta) => alertas.addRow([fechaReal(alerta.created_at), alerta.tipo, alerta.nivel, alerta.estado, alerta.mensaje, [alerta.canal_telegram ? "Telegram" : "", alerta.canal_email ? "Email" : "", alerta.canal_push ? "Push" : ""].filter(Boolean).join(", ")]));
+  datos.alertas.forEach((alerta) => alertas.addRow([fechaReal(alerta.created_at), alerta.tipo, alerta.nivel, alerta.estado, alerta.mensaje, alerta.canal_push ? "Push" : ""]));
   ajustarColumnas(alertas, [14, 24, 16, 16, 60, 28]);
   formatearFechas(alertas);
 

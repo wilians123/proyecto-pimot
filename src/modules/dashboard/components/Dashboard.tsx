@@ -42,7 +42,15 @@ function saludoPorHora() {
 }
 
 function iniciales(nombre: string) {
-  return nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((parte) => parte[0]).join("").toUpperCase() || "U";
+  return (
+    nombre
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((parte) => parte[0])
+      .join("")
+      .toUpperCase() || "U"
+  );
 }
 
 // CRÍTICO: Leaflet usa `window` y `document` directamente.
@@ -137,13 +145,33 @@ export default function Dashboard() {
   const { viajes, loading: viajesLoading } = useViajes();
   const { alertas: alertasActivas, loading: alertasLoading } = useAlertas(true);
   const { stats, loading: statsLoading } = useStats();
-  const { stats: operationalStats, loading: operationalLoading } = useDashboardOperationalStats();
-  const viajesActivos = viajes.filter((viaje) => viaje.estado !== "finalizado");
+  const { stats: operationalStats, loading: operationalLoading } =
+    useDashboardOperationalStats();
+  const viajesActivos = viajes.filter(
+    (viaje) =>
+      !viaje.deleted_at &&
+      ["programado", "en_transito", "en_destino", "de_vuelta"].includes(
+        viaje.estado,
+      ),
+  );
+  const proximoViajeProgramado = viajesActivos
+    .filter((viaje) => viaje.estado === "programado" && viaje.fecha_inicio)
+    .sort(
+      (a, b) =>
+        new Date(a.fecha_inicio ?? 0).getTime() -
+        new Date(b.fecha_inicio ?? 0).getTime(),
+    )[0];
   const nombreUsuario = profile?.nombre?.trim() || "Usuario";
   const pilotoDestacado = operationalStats.pilotoDestacado;
-  const disponibles = operationalStats.cabezales.activo + operationalStats.chasis.disponible;
-  const enViaje = operationalStats.cabezales.en_viaje + operationalStats.chasis.en_flete + operationalStats.chasis.en_renta;
-  const enTaller = operationalStats.cabezales.en_mantenimiento + operationalStats.chasis.en_taller;
+  const disponibles =
+    operationalStats.cabezales.activo + operationalStats.chasis.disponible;
+  const enViaje =
+    operationalStats.cabezales.en_viaje +
+    operationalStats.chasis.en_flete +
+    operationalStats.chasis.en_renta;
+  const enTaller =
+    operationalStats.cabezales.en_mantenimiento +
+    operationalStats.chasis.en_taller;
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-screen-2xl mx-auto">
@@ -174,10 +202,12 @@ export default function Dashboard() {
               Activos
             </p>
             <p className="text-3xl font-black text-blue-600 tabular-nums leading-none mt-1">
-              {statsLoading ? "—" : stats?.en_transito ?? 0}
+              {statsLoading ? "—" : (stats?.en_transito ?? 0)}
             </p>
             <p className="text-xs text-slate-400 mt-1 hidden sm:block">
-              {statsLoading ? "Cargando…" : `${stats?.en_transito ?? viajesActivos.length} en tránsito`}
+              {statsLoading
+                ? "Cargando…"
+                : `${stats?.en_transito ?? viajesActivos.length} en tránsito`}
             </p>
           </div>
         </div>
@@ -191,10 +221,12 @@ export default function Dashboard() {
               Programados
             </p>
             <p className="text-3xl font-black text-slate-700 tabular-nums leading-none mt-1">
-              {statsLoading ? "—" : stats?.programados ?? 0}
+              {statsLoading ? "—" : (stats?.programados ?? 0)}
             </p>
             <p className="text-xs text-slate-400 mt-1 hidden sm:block">
-              Próximo: 15:00 hrs
+              {proximoViajeProgramado?.fecha_inicio
+                ? `Próximo: ${formatHora(proximoViajeProgramado.fecha_inicio)} hrs`
+                : "Sin próximos viajes"}
             </p>
           </div>
         </div>
@@ -208,7 +240,7 @@ export default function Dashboard() {
               Finalizados
             </p>
             <p className="text-3xl font-black text-green-600 tabular-nums leading-none mt-1">
-              {statsLoading ? "—" : stats?.finalizados ?? 0}
+              {statsLoading ? "—" : (stats?.finalizados ?? 0)}
             </p>
             <p className="text-xs text-slate-400 mt-1 hidden sm:block">
               Promedio: {formatDuracion(stats?.dur_prom_min)}
@@ -291,21 +323,9 @@ export default function Dashboard() {
               </p>
             ) : (
               alertasActivas.map((alerta) => (
-                <AlertaBadge
-                  key={alerta.id}
-                  alerta={alertaAResumen(alerta)}
-                />
+                <AlertaBadge key={alerta.id} alerta={alertaAResumen(alerta)} />
               ))
             )}
-          </div>
-          <div className="px-4 py-3 border-t border-slate-100">
-            <button
-              className="w-full text-sm font-semibold text-orange-600
-              hover:text-orange-700 transition-colors cursor-pointer py-1
-              hover:bg-orange-50 rounded-lg"
-            >
-              Ver todas las alertas →
-            </button>
           </div>
         </div>
       </div>
@@ -349,7 +369,10 @@ export default function Dashboard() {
             <tbody>
               {viajesLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-6 text-center text-slate-400">
+                  <td
+                    colSpan={5}
+                    className="px-5 py-6 text-center text-slate-400"
+                  >
                     Cargando viajes…
                   </td>
                 </tr>
@@ -399,32 +422,34 @@ export default function Dashboard() {
             <p className="px-4 py-6 text-sm text-center text-slate-400">
               Cargando viajes…
             </p>
-          ) : viajesActivos.map((v) => (
-            <div
-              key={v.id}
-              className="px-4 py-3.5 hover:bg-slate-50 cursor-pointer"
-            >
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div>
-                  <p className="font-bold text-slate-800">
-                    {v.piloto?.nombre ?? "Sin piloto"}
-                  </p>
-                  <p className="text-xs font-mono text-slate-400 mt-0.5">
-                    {v.codigo ?? v.id.slice(0, 8)}
-                  </p>
+          ) : (
+            viajesActivos.map((v) => (
+              <div
+                key={v.id}
+                className="px-4 py-3.5 hover:bg-slate-50 cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p className="font-bold text-slate-800">
+                      {v.piloto?.nombre ?? "Sin piloto"}
+                    </p>
+                    <p className="text-xs font-mono text-slate-400 mt-0.5">
+                      {v.codigo ?? v.id.slice(0, 8)}
+                    </p>
+                  </div>
+                  <Badge estado={v.estado} />
                 </div>
-                <Badge estado={v.estado} />
+                <p className="text-sm text-slate-600">
+                  {v.origen}
+                  <span className="text-slate-400 mx-1 font-bold">→</span>
+                  {v.destino}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Est. {formatHora(v.fecha_estimada)}
+                </p>
               </div>
-              <p className="text-sm text-slate-600">
-                {v.origen}
-                <span className="text-slate-400 mx-1 font-bold">→</span>
-                {v.destino}
-              </p>
-              <p className="text-xs text-slate-400 mt-1">
-                Est. {formatHora(v.fecha_estimada)}
-              </p>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
@@ -503,9 +528,13 @@ export default function Dashboard() {
               {pilotoDestacado ? iniciales(pilotoDestacado.nombre) : "—"}
             </div>
             <div>
-              <p className="font-bold text-slate-800">{pilotoDestacado?.nombre ?? "Sin datos"}</p>
+              <p className="font-bold text-slate-800">
+                {pilotoDestacado?.nombre ?? "Sin datos"}
+              </p>
               <p className="text-xs text-slate-500 mt-0.5">
-                {operationalLoading ? "Cargando…" : `${pilotoDestacado?.viajes ?? 0} viajes últimos 30 días`}
+                {operationalLoading
+                  ? "Cargando…"
+                  : `${pilotoDestacado?.viajes ?? 0} viajes últimos 30 días`}
               </p>
               <div className="flex items-center gap-1.5 mt-1">
                 <div className="flex-1 bg-slate-100 rounded-full h-1.5 w-20">
@@ -514,7 +543,9 @@ export default function Dashboard() {
                     style={{ width: pilotoDestacado ? "100%" : "0%" }}
                   />
                 </div>
-                <span className="text-xs font-bold text-orange-600">{pilotoDestacado ? "100%" : "—"}</span>
+                <span className="text-xs font-bold text-orange-600">
+                  {pilotoDestacado ? "100%" : "—"}
+                </span>
               </div>
             </div>
           </div>
