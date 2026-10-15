@@ -133,6 +133,7 @@ export default function MapaFlota({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<number, L.Marker>>(new Map());
+  const markerAnimationFramesRef = useRef<Map<number, number>>(new Map());
   const ultimoRumboRef = useRef<Map<number, number>>(new Map());
   const mapReadyRef = useRef(false);
   const initStartedRef = useRef(false);
@@ -190,6 +191,7 @@ export default function MapaFlota({
 
     const container = mapContainerRef.current;
     const markers = markersRef.current;
+    const markerAnimationFrames = markerAnimationFramesRef.current;
     const centro: [number, number] = [15.708, -88.598];
 
     import("leaflet").then((L) => {
@@ -257,6 +259,8 @@ export default function MapaFlota({
       if (ro) ro.disconnect();
 
       if (leafletMapRef.current) {
+        markerAnimationFrames.forEach((frame) => cancelAnimationFrame(frame));
+        markerAnimationFrames.clear();
         markers.forEach((m) => m.remove());
         markers.clear();
         if (destinoMarkerRef.current) {
@@ -295,6 +299,11 @@ export default function MapaFlota({
       // Eliminar marcadores de trackers que ya no existen
       markers.forEach((marker, id) => {
         if (!idsActivos.has(id)) {
+          const frame = markerAnimationFramesRef.current.get(id);
+          if (frame !== undefined) {
+            cancelAnimationFrame(frame);
+            markerAnimationFramesRef.current.delete(id);
+          }
           map.removeLayer(marker);
           markers.delete(id);
         }
@@ -310,6 +319,13 @@ export default function MapaFlota({
         ) {
           const existing = markers.get(tracker.tracker_id);
           if (existing) {
+            const frame = markerAnimationFramesRef.current.get(
+              tracker.tracker_id,
+            );
+            if (frame !== undefined) {
+              cancelAnimationFrame(frame);
+              markerAnimationFramesRef.current.delete(tracker.tracker_id);
+            }
             map.removeLayer(existing);
             markers.delete(tracker.tracker_id);
           }
@@ -349,7 +365,64 @@ export default function MapaFlota({
 
         if (markers.has(tracker.tracker_id)) {
           const m = markers.get(tracker.tracker_id)!;
-          m.setLatLng(pos);
+          const current = m.getLatLng();
+          const latitudInicial = current.lat;
+          const longitudInicial = current.lng;
+          const latitudDelta = tracker.lat - latitudInicial;
+          const longitudDelta = tracker.lng - longitudInicial;
+          const distanciaGrados = Math.hypot(latitudDelta, longitudDelta);
+
+          const frameAnterior = markerAnimationFramesRef.current.get(
+            tracker.tracker_id,
+          );
+          if (frameAnterior !== undefined) {
+            cancelAnimationFrame(frameAnterior);
+            markerAnimationFramesRef.current.delete(tracker.tracker_id);
+          }
+
+          if (distanciaGrados > 0.000001) {
+            const duracion = 12_000;
+            const inicio = performance.now();
+            const seguirUnidad =
+              tracker.tracker_id === trackerSeleccionado ||
+              (centerOnHighlight &&
+                tracker.tracker_id === highlightTrackerId);
+
+            const animarPosicion = (ahora: number) => {
+              const progreso = Math.min((ahora - inicio) / duracion, 1);
+              // Suaviza el arranque y el frenado sin retrasar la posición final.
+              const progresoSuave =
+                progreso < 0.5
+                  ? 4 * progreso * progreso * progreso
+                  : 1 - Math.pow(-2 * progreso + 2, 3) / 2;
+              const lat = latitudInicial + latitudDelta * progresoSuave;
+              const lng = longitudInicial + longitudDelta * progresoSuave;
+              const posicionActual: [number, number] = [lat, lng];
+
+              m.setLatLng(posicionActual);
+              if (seguirUnidad && leafletMapRef.current) {
+                leafletMapRef.current.panTo(posicionActual, {
+                  animate: false,
+                });
+              }
+
+              if (progreso < 1) {
+                markerAnimationFramesRef.current.set(
+                  tracker.tracker_id,
+                  requestAnimationFrame(animarPosicion),
+                );
+              } else {
+                markerAnimationFramesRef.current.delete(tracker.tracker_id);
+              }
+            };
+
+            markerAnimationFramesRef.current.set(
+              tracker.tracker_id,
+              requestAnimationFrame(animarPosicion),
+            );
+          } else {
+            m.setLatLng(pos);
+          }
           m.setIcon(icon);
           m.setPopupContent(popupHTML);
         } else {

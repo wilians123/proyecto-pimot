@@ -55,3 +55,6 @@ SECURITY_AUDIT.md
 *firebase-adminsdk*.json
 .env*.local
 !.env.example
+
+.vercel
+.env*
