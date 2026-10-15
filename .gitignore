@@ -54,3 +54,4 @@ prompts/
 SECURITY_AUDIT.md
 *firebase-adminsdk*.json
 .env*.local
+!.env.example

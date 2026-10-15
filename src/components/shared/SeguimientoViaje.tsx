@@ -1,19 +1,12 @@
 // SeguimientoViaje.tsx
 // Panel de seguimiento GPS del viaje activo.
-// Gestiona la automatización de estados via geofence y muestra
-// datos live del tracker. Abre modal con MapaFlota al pulsar "Ver en mapa".
+// Muestra datos live del tracker sin modificar el viaje.
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavixy } from "@/hooks/useNavixy";
 import { useGeofence } from "@/hooks/useGeofence";
-import {
-  actualizarEstadoViaje,
-  incrementarLecturasDestino,
-  incrementarLecturasInicio,
-} from "@/services/viajes.service";
-import type { EstadoViaje } from "@/types";
 
 const MapaFlota = dynamic(() => import("@/components/shared/MapaFlota"), {
   ssr: false,
@@ -41,24 +34,15 @@ interface SeguimientoViajeProps {
   onEstadoCambiado: () => void;
 }
 
-export default function SeguimientoViaje({
-  cabezalId,
-  cabezalPlaca,
-  origenLat = null,
-  origenLng = null,
-  destinoLat = null,
-  destinoLng = null,
-  destinoNombre = null,
-  viajeId,
-  estadoViaje,
-  bloqueado,
-  lecturasInicioConfirm = 0,
-  lecturasFueraDestino,
-  soloLectura = false,
-  onEstadoCambiado,
-}: SeguimientoViajeProps) {
+export default function SeguimientoViaje(props: SeguimientoViajeProps) {
+  const {
+    cabezalId,
+    cabezalPlaca,
+    destinoLat = null,
+    destinoLng = null,
+    destinoNombre = null,
+  } = props;
   const [modalAbierto, setModalAbierto] = useState(false);
-  const [procesandoTransicion, setProcesandoTransicion] = useState(false);
 
   const { trackers, ultimaActualizacion } = useNavixy({
     intervalo: 15_000,
@@ -70,126 +54,12 @@ export default function SeguimientoViaje({
     return trackers.find((t) => t.cabezal_id === cabezalId) ?? null;
   }, [trackers, cabezalId]);
 
-  const { transicion, distanciaDestinoM } = useGeofence({
+  const { distanciaDestinoM } = useGeofence({
     trackerLat: datosTracker?.lat ?? null,
     trackerLng: datosTracker?.lng ?? null,
-    estadoActual: estadoViaje,
-    origenLat,
-    origenLng,
     destinoLat,
     destinoLng,
-    bloqueado,
-    lecturasFueraDestino,
-    lecturasInicioConfirm,
   });
-
-  // Ref con el Set de transiciones ya enviadas en este montaje.
-  const transicionesEnviadasRef = useRef<Set<string>>(new Set());
-
-  // Timeout de seguridad: si procesandoTransicion queda en true más de 8s
-  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const limpiarSafetyTimer = useCallback(() => {
-    if (safetyTimerRef.current) {
-      clearTimeout(safetyTimerRef.current);
-      safetyTimerRef.current = null;
-    }
-  }, []);
-
-  // Procesa la actualización de estado del viaje
-  const ejecutarTransicion = useCallback(
-    async (estadoNuevo: string) => {
-      if (soloLectura) return;
-      setProcesandoTransicion(true);
-      limpiarSafetyTimer();
-
-      // Timeout de seguridad: libera el spinner si la operación no responde en 8s
-      safetyTimerRef.current = setTimeout(() => {
-        setProcesandoTransicion(false);
-        console.warn("[SeguimientoViaje] Actualización timeout — reseteando spinner");
-      }, 8_000);
-
-      const { error } = await actualizarEstadoViaje(viajeId, estadoNuevo as EstadoViaje);
-
-      limpiarSafetyTimer();
-      setProcesandoTransicion(false);
-
-      if (!error) {
-        onEstadoCambiado();
-      } else {
-        console.error("[SeguimientoViaje] Error actualizando estado:", error);
-      }
-    },
-    [viajeId, onEstadoCambiado, limpiarSafetyTimer, soloLectura],
-  );
-
-  const incrementarContadorInicio = useCallback(async () => {
-    if (soloLectura) return;
-    const { error } = await incrementarLecturasInicio(viajeId);
-    if (!error) {
-      onEstadoCambiado();
-    } else {
-      console.error("[SeguimientoViaje] Error incrementando contador de inicio:", error);
-    }
-  }, [viajeId, onEstadoCambiado, soloLectura]);
-
-  // Incrementa el contador de lecturas fuera del destino
-  const incrementarContadorDestino = useCallback(async () => {
-    if (soloLectura) return;
-    const { error } = await incrementarLecturasDestino(viajeId);
-    if (!error) {
-      onEstadoCambiado();
-    } else {
-      console.error("[SeguimientoViaje] Error incrementando contador:", error);
-    }
-  }, [viajeId, onEstadoCambiado, soloLectura]);
-
-  // Procesar la transición detectada por el geofence.
-  useEffect(() => {
-    if (soloLectura || !transicion || procesandoTransicion) return;
-    if (trackers.length === 0) return;
-
-    const clave =
-      transicion === "confirmar_inicio"
-        ? `${estadoViaje}:${transicion}:${lecturasInicioConfirm}`
-        : transicion === "salida_destino"
-          ? `${estadoViaje}:${transicion}:${lecturasFueraDestino}`
-          : `${estadoViaje}:${transicion}`;
-    if (transicionesEnviadasRef.current.has(clave)) return;
-    transicionesEnviadasRef.current.add(clave);
-
-    // Diferir la ejecución para evitar race conditions
-    const t = setTimeout(() => {
-      if (transicion === "confirmar_inicio") {
-        incrementarContadorInicio();
-      } else if (transicion === "salida_destino") {
-        incrementarContadorDestino();
-      } else {
-        ejecutarTransicion(transicion);
-      }
-    }, 0);
-
-    return () => clearTimeout(t);
-  }, [
-    transicion,
-    soloLectura,
-    procesandoTransicion,
-    estadoViaje,
-    lecturasInicioConfirm,
-    lecturasFueraDestino,
-    trackers.length,
-    ejecutarTransicion,
-    incrementarContadorInicio,
-    incrementarContadorDestino,
-  ]);
-
-  // Limpiar el Set cuando cambia el estado del viaje
-  useEffect(() => {
-    transicionesEnviadasRef.current.clear();
-  }, [estadoViaje]);
-
-  // Limpiar timer de seguridad al desmontar
-  useEffect(() => () => limpiarSafetyTimer(), [limpiarSafetyTimer]);
 
   // Tiempo desde la última actualización GPS
   const [tiempoActualizado, setTiempoActualizado] = useState<string | null>(
@@ -387,14 +257,9 @@ export default function SeguimientoViaje({
           </div>
         )}
 
-        {procesandoTransicion && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
-            <span className="w-3 h-3 border-2 border-amber-400 border-t-amber-700 rounded-full animate-spin shrink-0" />
-            <p className="text-xs font-semibold text-amber-700">
-              Actualizando estado del viaje…
-            </p>
-          </div>
-        )}
+        <p className="text-[11px] text-slate-400">
+          Los cambios de estado automáticos los gestiona el servidor
+        </p>
 
         <button
           onClick={() => setModalAbierto(true)}

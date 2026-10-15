@@ -4,11 +4,13 @@ import {
   procesarGeofenceViajes,
   type TrackerGeofenceState,
 } from "@/services/geofence-processor.service";
+import { registrarClavesGpsUnaVez } from "@/utils/navixy-diagnostic";
 
 interface NavixyState {
   gps?: {
     location?: { lat: number; lng: number };
     speed?: number;
+    heading?: number;
   };
 }
 
@@ -57,6 +59,7 @@ async function cargarTrackers(): Promise<{
 
   const json = (await res.json()) as NavixyStatesResponse;
   if (!json.success) return { trackers: [], error: "Navixy devolvio success:false" };
+  registrarClavesGpsUnaVez(Object.values(json.states)[0]?.gps);
 
   const cabezalPorTracker = new Map(
     (meta ?? []).map((tracker) => [tracker.tracker_id, tracker.cabezal_id]),
@@ -90,9 +93,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: resultado.error }, { status: 500 });
   }
 
+  const resumen = resultado.eventos.reduce<Record<string, number>>((conteo, evento) => {
+    conteo[evento.accion] = (conteo[evento.accion] ?? 0) + 1;
+    return conteo;
+  }, {});
+
   return NextResponse.json({
     ok: true,
     trackers: trackers.length,
     eventos: resultado.eventos,
+    resumen,
   });
 }

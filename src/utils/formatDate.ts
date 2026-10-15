@@ -16,6 +16,38 @@ export function formatFecha(fecha?: string | null, incluirHora = false): string 
   return d.toLocaleDateString('es-GT', opciones)
 }
 
+/** Convierte una fecha de datetime-local interpretada siempre en UTC-6 a ISO UTC. */
+export function inputLocalAIso(valor: string | null | undefined): string | null {
+  if (!valor) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(valor)
+  if (!match) return null
+  const [, anio, mes, dia, hora, minuto] = match
+  const calendarioLocal = new Date(0)
+  calendarioLocal.setUTCFullYear(Number(anio), Number(mes) - 1, Number(dia))
+  calendarioLocal.setUTCHours(Number(hora), Number(minuto), 0, 0)
+  if (
+    Number(mes) < 1 || Number(mes) > 12 || Number(dia) < 1 ||
+    Number(hora) > 23 || Number(minuto) > 59 ||
+    calendarioLocal.getUTCFullYear() !== Number(anio) ||
+    calendarioLocal.getUTCMonth() + 1 !== Number(mes) ||
+    calendarioLocal.getUTCDate() !== Number(dia) ||
+    calendarioLocal.getUTCHours() !== Number(hora) ||
+    calendarioLocal.getUTCMinutes() !== Number(minuto)
+  ) return null
+  const instante = new Date(`${anio}-${mes}-${dia}T${hora}:${minuto}:00-06:00`)
+  if (!Number.isFinite(instante.getTime())) return null
+  return instante.toISOString()
+}
+
+/** Presenta un instante ISO en la hora fija de Guatemala (UTC-6). */
+export function isoAInputLocal(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const fecha = new Date(iso)
+  if (!Number.isFinite(fecha.getTime())) return ''
+  const guatemala = new Date(fecha.getTime() - 6 * 60 * 60 * 1000)
+  return `${guatemala.getUTCFullYear()}-${String(guatemala.getUTCMonth() + 1).padStart(2, '0')}-${String(guatemala.getUTCDate()).padStart(2, '0')}T${String(guatemala.getUTCHours()).padStart(2, '0')}:${String(guatemala.getUTCMinutes()).padStart(2, '0')}`
+}
+
 export function formatDuracion(minutos?: number | null): string {
   if (!minutos) return '—'
   const h = Math.floor(minutos / 60)

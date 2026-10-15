@@ -88,6 +88,7 @@ export interface Viaje {
   bloqueado?: boolean
   lecturas_inicio_confirm?: number
   lecturas_fuera_destino?: number
+  transiciones_inferidas?: string[]
   deleted_at?: string | null
   piloto?: Piloto
   cabezal?: Cabezal

@@ -8,6 +8,7 @@ import type { Database } from '@/types/database'
 type ViajeRow = Database['public']['Tables']['viajes']['Row']
 type ViajeInsert = Database['public']['Tables']['viajes']['Insert']
 
+/** @deprecated Las transiciones automáticas las gestiona el procesador del servidor. */
 export async function actualizarEstadoViaje(
   viajeId: string,
   nuevoEstado: EstadoViaje
@@ -52,6 +53,7 @@ export async function crearViaje(datos: ViajeInsert): Promise<{ data: ViajeRow |
   return { data: data as ViajeRow, error: error?.message ?? null }
 }
 
+/** @deprecated Los contadores automáticos los gestiona el procesador del servidor. */
 export async function incrementarLecturasDestino(
   viajeId: string
 ): Promise<{ error: string | null }> {
@@ -75,6 +77,7 @@ export async function incrementarLecturasDestino(
   return { error: updateError?.message ?? null }
 }
 
+/** @deprecated Los contadores automáticos los gestiona el procesador del servidor. */
 export async function incrementarLecturasInicio(
   viajeId: string
 ): Promise<{ error: string | null }> {

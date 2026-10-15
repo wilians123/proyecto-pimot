@@ -8,6 +8,8 @@ import { alertaAResumen } from "@/utils/alertaView";
 import { sincronizarSeccion } from "@/lib/seccion-url";
 import { usePermisos } from "@/hooks/usePermisos";
 
+const habilitarAlertasDePrueba = process.env.NEXT_PUBLIC_ENABLE_ALERT_TESTS === "1";
+
 function esHoy(fecha: string) {
   const date = new Date(fecha);
   const ahora = new Date();
@@ -42,6 +44,7 @@ export default function Alertas() {
   ).length;
 
   async function generarPruebas() {
+    if (!habilitarAlertasDePrueba) return;
     setGenerando(true);
     setError(null);
     try {
@@ -78,7 +81,7 @@ export default function Alertas() {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold text-slate-800">Alertas</h2>
-        {rol === "admin" && (
+        {rol === "admin" && habilitarAlertasDePrueba && (
           <button
             type="button"
             onClick={generarPruebas}

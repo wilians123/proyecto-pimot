@@ -24,6 +24,7 @@ function formatHora(fecha: string | null) {
   return new Intl.DateTimeFormat("es-GT", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Guatemala",
   }).format(date);
 }
 

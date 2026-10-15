@@ -1,9 +1,10 @@
 import fs from "fs";
 import path from "path";
 import {
-  evaluarGeofence,
+  evaluarGeofencePuro,
   GEOFENCE_CONFIG,
-  GEOFENCE_DEFAULT_ORIGIN,
+  GEOFENCE_FALLBACK,
+  ORIGEN_PIMOT,
 } from "../../../../src/lib/geofence";
 import type { EstadoViaje } from "../../../../src/types";
 
@@ -42,18 +43,6 @@ function saveArtifact(name: string, obj: unknown) {
   }
 }
 
-function applyTransition(state: EstadoViaje, transicion: string | null): EstadoViaje {
-  if (
-    transicion === "en_transito" ||
-    transicion === "en_destino" ||
-    transicion === "de_vuelta" ||
-    transicion === "finalizado"
-  ) {
-    return transicion;
-  }
-  return state;
-}
-
 describe("Geofence ida + vuelta simulation", () => {
   test("advances programado -> en_transito -> en_destino -> de_vuelta -> finalizado", () => {
     const base = path.join(__dirname, "..", "..", "data");
@@ -68,41 +57,55 @@ describe("Geofence ida + vuelta simulation", () => {
       state: "programado" as EstadoViaje,
       lecturasInicioConfirm: 0,
       lecturasFueraDestino: 0,
+      enOrigenVisto: false,
+      maxDistOrigenM: 0,
     };
     const events: EventLog[] = [];
+    let previa: Point | null = null;
 
     function runPoints(points: Point[], phase: "ida" | "vuelta") {
       for (let i = 0; i < points.length; i++) {
         const p = points[i];
         const stateBefore = trip.state;
-        const res = evaluarGeofence({
-          trackerLat: p.lat,
-          trackerLng: p.lng,
-          estadoActual: trip.state,
-          origenLat: ida.metadata.origin.lat,
-          origenLng: ida.metadata.origin.lng,
-          destinoLat: ida.metadata.destination.lat,
-          destinoLng: ida.metadata.destination.lng,
-          bloqueado: false,
+        const actual = { lat: p.lat, lng: p.lng };
+        const dtSegundos = previa
+          ? (Date.parse(p.timestamp) - Date.parse(previa.timestamp)) / 1000
+          : null;
+        const res = evaluarGeofencePuro({
+          estado: trip.state as "programado" | "en_transito" | "en_destino" | "de_vuelta",
+          actual,
+          previa: previa ? { lat: previa.lat, lng: previa.lng } : null,
+          dtSegundos,
+          destino: {
+            lat: ida.metadata.destination.lat,
+            lng: ida.metadata.destination.lng,
+          },
+          params: {
+            radioInicioM: GEOFENCE_FALLBACK.radio_inicio_m,
+            radioLlegadaM: GEOFENCE_FALLBACK.radio_llegada_m,
+            radioSalidaM: GEOFENCE_FALLBACK.radio_salida_m,
+            radioRetornoM: GEOFENCE_FALLBACK.radio_retorno_m,
+            lecturasParaInicio: GEOFENCE_FALLBACK.lecturas_para_inicio,
+            lecturasParaSalida: GEOFENCE_FALLBACK.lecturas_para_salida,
+            toleranciaRuidoM: GEOFENCE_FALLBACK.tolerancia_ruido_m,
+          },
           lecturasInicioConfirm: trip.lecturasInicioConfirm,
           lecturasFueraDestino: trip.lecturasFueraDestino,
+          enOrigenVisto: trip.enOrigenVisto,
+          maxDistOrigenM: trip.maxDistOrigenM,
         });
 
-        if (res.transicion === "confirmar_inicio") {
-          trip.lecturasInicioConfirm++;
-        } else if (res.transicion === "salida_destino") {
-          trip.lecturasFueraDestino++;
-        } else if (res.transicion === "en_transito") {
-          trip.state = "en_transito";
-          trip.lecturasInicioConfirm = 0;
-        } else if (res.transicion === "en_destino") {
-          trip.state = "en_destino";
-          trip.lecturasFueraDestino = 0;
-        } else if (res.transicion === "de_vuelta") {
-          trip.state = "de_vuelta";
-          trip.lecturasFueraDestino = 0;
+        trip.enOrigenVisto = res.enOrigenVisto;
+        trip.maxDistOrigenM = res.maxDistOrigenM;
+        if (res.objetivo) {
+          trip.state = res.objetivo;
+          if (res.objetivo === "en_transito") trip.lecturasInicioConfirm = 0;
+          if (res.objetivo === "en_destino" || res.objetivo === "de_vuelta") {
+            trip.lecturasFueraDestino = 0;
+          }
         } else {
-          trip.state = applyTransition(trip.state, res.transicion);
+          trip.lecturasInicioConfirm = res.lecturasInicioConfirm;
+          trip.lecturasFueraDestino = res.lecturasFueraDestino;
         }
 
         events.push({
@@ -113,12 +116,13 @@ describe("Geofence ida + vuelta simulation", () => {
           lng: p.lng,
           stateBefore,
           stateAfter: trip.state,
-          transicion: res.transicion,
-          distanciaDestinoM: res.distanciaDestinoM,
-          distanciaOrigenM: res.distanciaOrigenM,
+          transicion: res.objetivo,
+          distanciaDestinoM: res.distanciaDestinoPuntoM,
+          distanciaOrigenM: res.distanciaOrigenPuntoM,
           lecturasInicioConfirm: trip.lecturasInicioConfirm,
           lecturasFueraDestino: trip.lecturasFueraDestino,
         });
+        previa = p;
 
         if (phase === "vuelta" && trip.state === "finalizado") break;
       }
@@ -138,7 +142,7 @@ describe("Geofence ida + vuelta simulation", () => {
         "# Geofence E2E Simulation Report",
         "",
         `Config: inicio ${GEOFENCE_CONFIG.radioInicioM}m, llegada ${GEOFENCE_CONFIG.radioLlegadaM}m, salida ${GEOFENCE_CONFIG.radioSalidaM}m, retorno ${GEOFENCE_CONFIG.radioRetornoM}m.`,
-        `Origen usado: ${GEOFENCE_DEFAULT_ORIGIN.lat}, ${GEOFENCE_DEFAULT_ORIGIN.lng}.`,
+        `Origen usado: ${ORIGEN_PIMOT.lat}, ${ORIGEN_PIMOT.lng}.`,
         "",
         "| fase | index | estado anterior | estado nuevo | transicion | distancia origen m | distancia destino m |",
         "| --- | ---: | --- | --- | --- | ---: | ---: |",

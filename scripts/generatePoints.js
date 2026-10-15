@@ -1,9 +1,10 @@
 // generatePoints.js
 // Intención: generar puntos interpolados entre Puerto Barrios y Zacapa para la simulación de geofence.
 // Fuente de verdad: src/hooks/useGeofence.ts
+/* eslint-disable @typescript-eslint/no-require-imports -- Este script legado se ejecuta en CommonJS con Node. */
 const fs = require("fs");
 
-const PB = { lat: 15.69455, lng: -88.57833 };
+const PB = { lat: 15.640187, lng: -88.546492 };
 const ZAC = { lat: 14.95, lng: -89.53 };
 const SPEED_KMH = 40; // 40 km/h
 const SECS_PER_TICK = 10; // lecturas cada 10s

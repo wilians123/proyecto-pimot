@@ -17,6 +17,9 @@ import { icons } from "@/lib/constants";
 import type { Database } from "@/types/database";
 import { usePermisos } from "@/hooks/usePermisos";
 import { leerSeccionInicial, sincronizarSeccion } from "@/lib/seccion-url";
+import { ESTADOS_ACTIVOS, ORIGEN_PIMOT } from "@/lib/geofence";
+import { obtenerOcupadas } from "@/lib/unidades-ocupadas";
+import { inputLocalAIso, isoAInputLocal } from "@/utils/formatDate";
 
 // SeguimientoViaje: tarjetas GPS live + modal con MapaFlota. Sin Leaflet inline.
 const SeguimientoViaje = dynamic(
@@ -397,6 +400,9 @@ export default function Viajes() {
   const [cabezales, setCabezales] = useState<CabezalRow[]>([]);
   const [chasisList, setChasis] = useState<ChasisRow[]>([]);
   const [clientes, setClientes] = useState<ClienteRow[]>([]);
+  const [viajesUnidadesActivas, setViajesUnidadesActivas] = useState<
+    Array<{ id: string; cabezal_id: string | null; chasis_id: string | null }>
+  >([]);
   const [loadingCatalogos, setLoadingCatalogos] = useState(false);
 
   // ── Campos del formulario nuevo viaje ─────────────────────────
@@ -429,15 +435,28 @@ export default function Viajes() {
 
   // Derivados del formulario
   const pilotoSelec = pilotos.find((p) => p.id === fPilotoId) ?? null;
-  const cabezalSelec = cabezales.find((c) => c.id === fCabezalId) ?? null;
+  const unidadesOcupadas = obtenerOcupadas(viajesUnidadesActivas, viajeEditando?.id);
+  const cabezalesDisponibles = cabezales.filter(
+    (c) =>
+      (c.estado === "activo" || c.id === viajeEditando?.cabezal_id) &&
+      !unidadesOcupadas.cabezales.has(c.id),
+  );
+  const cabezalesOcultos = cabezales.filter(
+    (c) => c.estado === "activo" && unidadesOcupadas.cabezales.has(c.id),
+  ).length;
+  const cabezalSelec = cabezalesDisponibles.find((c) => c.id === fCabezalId) ?? null;
   // En modo edición, el chasis ya asignado al viaje puede tener estado "en_uso".
   // Lo incluimos explícitamente para que aparezca seleccionado en el select.
   const chasisFiltrados = chasisList.filter(
     (c) =>
       c.tamaño === fTamano &&
       (c.estado === "disponible" ||
-        (viajeEditando !== null && c.id === viajeEditando.chasis_id)),
+        (viajeEditando !== null && c.id === viajeEditando.chasis_id)) &&
+      !unidadesOcupadas.chasis.has(c.id),
   );
+  const chasisOcultos = chasisList.filter(
+    (c) => c.tamaño === fTamano && unidadesOcupadas.chasis.has(c.id),
+  ).length;
 
   // ── Estado del panel de detalle ───────────────────────────────
   const [nuevoEstado, setNuevoEstado] = useState<EstadoViaje | "">("");
@@ -466,6 +485,20 @@ export default function Viajes() {
       return;
     }
     if (data) setViajesActivos(data as unknown as ViajeCompleto[]);
+  }, []);
+
+  const cargarViajesUnidadesActivas = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("viajes")
+      .select("id, cabezal_id, chasis_id")
+      .in("estado", [...ESTADOS_ACTIVOS])
+      .is("deleted_at", null);
+    if (error) {
+      console.error("[Viajes] Error consultando unidades ocupadas:", error.message);
+      return false;
+    }
+    setViajesUnidadesActivas(data ?? []);
+    return true;
   }, []);
 
   useEffect(() => {
@@ -528,7 +561,7 @@ export default function Viajes() {
 
     async function loadCatalogos() {
       setLoadingCatalogos(true);
-      const [{ data: ps }, { data: cs }, { data: chs }, { data: cl }] =
+      const [{ data: ps }, { data: cs }, { data: chs }, { data: cl }, { data: viajesOcupados }] =
         await Promise.all([
           supabase
             .from("pilotos")
@@ -538,7 +571,6 @@ export default function Viajes() {
           supabase
             .from("cabezales")
             .select("*")
-            .eq("estado", "activo")
             .order("placa"),
           supabase.from("chasis").select("*").order("placa"),
           supabase
@@ -546,6 +578,11 @@ export default function Viajes() {
             .select("*")
             .eq("activo", true)
             .order("nombre"),
+          supabase
+            .from("viajes")
+            .select("id, cabezal_id, chasis_id")
+            .in("estado", [...ESTADOS_ACTIVOS])
+            .is("deleted_at", null),
         ]);
 
       if (!active) return;
@@ -553,6 +590,7 @@ export default function Viajes() {
       if (cs) setCabezales(cs);
       if (chs) setChasis(chs);
       if (cl) setClientes(cl);
+      if (viajesOcupados) setViajesUnidadesActivas(viajesOcupados);
       setLoadingCatalogos(false);
     }
 
@@ -578,12 +616,12 @@ export default function Viajes() {
       setFDestinoLng((v.lng_destino as number | null) ?? null);
       setFInicio(
         v.fecha_inicio
-          ? new Date(v.fecha_inicio).toISOString().slice(0, 16)
+          ? isoAInputLocal(v.fecha_inicio)
           : "",
       );
       setFEstimada(
         v.fecha_estimada
-          ? new Date(v.fecha_estimada).toISOString().slice(0, 16)
+          ? isoAInputLocal(v.fecha_estimada)
           : "",
       );
       setFViatico(
@@ -643,7 +681,6 @@ export default function Viajes() {
             supabase
               .from("cabezales")
               .select("*")
-              .eq("estado", "activo")
               .order("placa"),
             supabase.from("chasis").select("*").order("placa"),
             supabase
@@ -661,10 +698,11 @@ export default function Viajes() {
         if (cl) setClientes(cl);
       }
 
+      await cargarViajesUnidadesActivas();
       cargarViajeEnFormulario(v, catalogoChasis);
       setTabPermitido("nuevo");
     },
-    [chasisList, cargarViajeEnFormulario, puedeEditar, setTabPermitido],
+    [chasisList, cargarViajeEnFormulario, puedeEditar, setTabPermitido, cargarViajesUnidadesActivas],
   );
 
   // ── Actualizar estado del viaje ───────────────────────────────
@@ -821,6 +859,25 @@ export default function Viajes() {
       return;
     }
 
+    const fechaInicioIso = inputLocalAIso(fFechaInicio);
+    const fechaEstimadaIso = inputLocalAIso(fFechaEst);
+    if ((fFechaInicio && !fechaInicioIso) || (fFechaEst && !fechaEstimadaIso)) {
+      setSaveError("Revisa las fechas ingresadas.");
+      return;
+    }
+
+    const errorUnidad = async (error: { code?: string; message: string }) => {
+      if (error.code !== "23505") return null;
+      await cargarViajesUnidadesActivas();
+      if (error.message.includes("uq_viajes_cabezal_activo")) {
+        return "El cabezal ya tiene un viaje activo asignado";
+      }
+      if (error.message.includes("uq_viajes_chasis_activo")) {
+        return "El chasis ya tiene un viaje activo asignado";
+      }
+      return null;
+    };
+
     setSaving(true);
 
     // ── Modo edición: UPDATE ──────────────────────────────────
@@ -835,11 +892,11 @@ export default function Viajes() {
           tipoChasis === "ajeno" ? fChasisPlaca.trim().toUpperCase() : null,
         cliente_id: fClienteId || null,
         viatico_monto: montoViatico,
-        fecha_inicio: fFechaInicio || null,
-        fecha_estimada: fFechaEst || null,
+        fecha_inicio: fechaInicioIso,
+        fecha_estimada: fechaEstimadaIso,
         notas: fNotas.trim() || null,
-        lat_origen: null,
-        lng_origen: null,
+        lat_origen: ORIGEN_PIMOT.lat,
+        lng_origen: ORIGEN_PIMOT.lng,
         lat_destino: fDestinoLat ?? null,
         lng_destino: fDestinoLng ?? null,
       };
@@ -852,7 +909,8 @@ export default function Viajes() {
       setSaving(false);
 
       if (error) {
-        setSaveError(`Error al actualizar: ${error.message}`);
+        const unidadMsg = await errorUnidad(error);
+        setSaveError(unidadMsg ?? `Error al actualizar: ${error.message}`);
         return;
       }
 
@@ -887,11 +945,11 @@ export default function Viajes() {
       cliente_id: fClienteId || null,
       tipo_servicio: "flete",
       viatico_monto: montoViatico,
-      fecha_inicio: fFechaInicio || null,
-      fecha_estimada: fFechaEst || null,
+      fecha_inicio: fechaInicioIso,
+      fecha_estimada: fechaEstimadaIso,
       notas: fNotas.trim() || null,
-      lat_origen: null,
-      lng_origen: null,
+      lat_origen: ORIGEN_PIMOT.lat,
+      lng_origen: ORIGEN_PIMOT.lng,
       lat_destino: fDestinoLat ?? null,
       lng_destino: fDestinoLng ?? null,
       bloqueado: false,
@@ -906,7 +964,8 @@ export default function Viajes() {
     setSaving(false);
 
     if (error) {
-      setSaveError(`Error al guardar: ${error.message}`);
+      const unidadMsg = await errorUnidad(error);
+      setSaveError(unidadMsg ?? `Error al guardar: ${error.message}`);
       return;
     }
 
@@ -947,6 +1006,7 @@ export default function Viajes() {
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: "America/Guatemala",
         })
       : "—";
 
@@ -1192,6 +1252,11 @@ export default function Viajes() {
 
                   <div className="p-5 space-y-4">
                     {/* Datos del viaje */}
+                    {viajeSelec.transiciones_inferidas?.length ? (
+                      <p className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                        Estados inferidos: {viajeSelec.transiciones_inferidas.join(", ")}
+                      </p>
+                    ) : null}
                     {(viajeSelec as ViajeCompleto & { bloqueado?: boolean })
                       .bloqueado && (
                       <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
@@ -1711,13 +1776,26 @@ export default function Viajes() {
                           className={selectCls}
                         >
                           <option value="">Seleccionar cabezal…</option>
-                          {cabezales.map((c) => (
+                          {cabezalesDisponibles.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.placa}
                               {c.marca ? ` · ${c.marca}` : ""}
                             </option>
                           ))}
+                          {cabezalesDisponibles.length === 0 && (
+                            <option disabled>Sin cabezales disponibles</option>
+                          )}
                         </select>
+                        {cabezalesOcultos > 0 && (
+                          <p className="mt-1 text-xs text-slate-400">
+                            {cabezalesOcultos} unidades ocultas por tener un viaje activo
+                          </p>
+                        )}
+                        {cabezalesDisponibles.length === 0 && (
+                          <p className="mt-1 text-xs font-medium text-amber-700">
+                            No hay cabezales disponibles para asignar.
+                          </p>
+                        )}
                         {cabezalSelec && (
                           <TrackerIndicador
                             cabezalId={cabezalSelec.id}
@@ -1770,23 +1848,35 @@ export default function Viajes() {
                         required
                       >
                         {tipoChasis === "propio" ? (
-                          <select
-                            value={fChasisId}
-                            onChange={(e) => setFChasisId(e.target.value)}
-                            className={selectCls}
-                          >
-                            <option value="">Seleccionar chasis…</option>
-                            {chasisFiltrados.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.placa} · {c.tamaño} pies
-                              </option>
-                            ))}
-                            {chasisFiltrados.length === 0 && (
-                              <option disabled>
-                                Sin chasis disponibles de este tamaño
-                              </option>
+                          <>
+                            <select
+                              value={fChasisId}
+                              onChange={(e) => setFChasisId(e.target.value)}
+                              className={selectCls}
+                            >
+                              <option value="">Seleccionar chasis…</option>
+                              {chasisFiltrados.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.placa} · {c.tamaño} pies
+                                </option>
+                              ))}
+                              {chasisFiltrados.length === 0 && (
+                                <option disabled>
+                                  Sin chasis disponibles de este tamaño
+                                </option>
+                              )}
+                            </select>
+                            {chasisOcultos > 0 && (
+                              <p className="mt-1 text-xs text-slate-400">
+                                {chasisOcultos} unidades ocultas por tener un viaje activo
+                              </p>
                             )}
-                          </select>
+                            {chasisFiltrados.length === 0 && (
+                              <p className="mt-1 text-xs font-medium text-amber-700">
+                                No hay chasis disponibles de este tamaño.
+                              </p>
+                            )}
+                          </>
                         ) : (
                           <input
                             type="text"

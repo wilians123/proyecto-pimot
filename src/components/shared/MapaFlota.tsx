@@ -19,6 +19,7 @@ void ETA_LABEL_STYLE;
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavixy } from "@/hooks/useNavixy";
 import type { TrackerConCabezal } from "@/hooks/useNavixy";
+import { escapeHtml } from "@/utils/escapeHtml";
 
 // ── Colores por estado de movimiento ─────────────────────────
 const COLOR_MOVIMIENTO: Record<string, string> = {
@@ -54,8 +55,8 @@ function crearPopupHTML(tracker: TrackerConCabezal): string {
         : tracker.movimiento === "stopped"
           ? "Detenido"
           : "Sin señal";
-  const unidadPrincipal = tracker.placa ?? tracker.label;
-  const detalleDispositivo = `Unidad ${tracker.label} · Tracker #${tracker.tracker_id}${tracker.bateria !== null ? ` · Batería ${tracker.bateria}%` : ""}`;
+  const unidadPrincipal = escapeHtml(tracker.placa ?? tracker.label);
+  const detalleDispositivo = `Unidad ${escapeHtml(tracker.label)} · Tracker #${tracker.tracker_id}${tracker.bateria !== null ? ` · Batería ${tracker.bateria}%` : ""}`;
   const colorMotor = tracker.encendido ? "#10b981" : "#ef4444";
   const estadoMotor = tracker.encendido ? "Encendido" : "Apagado";
   return `
@@ -102,7 +103,7 @@ function crearPopupHTML(tracker: TrackerConCabezal): string {
 interface MapaFlotaProps {
   altura?: string;
   className?: string;
-  /** tracker_id Navixy a destacar. Muestra marcador naranja ampliado. */
+  /** tracker_id Navixy a destacar: se dibuja ampliado (scale 1.2) y, con `centerOnHighlight`, el mapa vuela hacia él. */
   highlightTrackerId?: number | null;
   /** Si true, hace flyTo al tracker destacado (solo una vez por cambio). */
   centerOnHighlight?: boolean;
@@ -322,26 +323,17 @@ export default function MapaFlota({
         const esSeleccionado =
           tracker.tracker_id === trackerSeleccionado ||
           tracker.tracker_id === highlightTrackerId;
-        const trackerRumbo = tracker as TrackerConCabezal & {
-          heading?: number;
-          bearing?: number;
-        };
-        const rumboReportado = Number(
-          trackerRumbo.heading ?? trackerRumbo.bearing,
-        );
-        const rumboValido = Number.isFinite(rumboReportado);
-        const estacionado =
-          tracker.velocidad === 0 ||
-          tracker.movimiento === "stopped" ||
-          tracker.movimiento === "parked";
-        if (
-          rumboValido &&
-          (!estacionado || !ultimoRumboRef.current.has(tracker.tracker_id))
-        ) {
+        const rumboReportado = tracker.heading;
+        const rumboValido = typeof rumboReportado === "number" && Number.isFinite(rumboReportado);
+        const unidadEnMovimiento =
+          tracker.velocidad > 0 &&
+          tracker.movimiento !== "stopped" &&
+          tracker.movimiento !== "parked";
+        if (rumboValido && unidadEnMovimiento) {
           ultimoRumboRef.current.set(tracker.tracker_id, rumboReportado);
         }
         const rumbo = ultimoRumboRef.current.get(tracker.tracker_id) ?? 0;
-        const rotacion = rumbo + 180;
+        const rotacion = (rumbo + 180) % 360;
         const escala = esSeleccionado ? 1.2 : 1;
         const icon = L.divIcon({
           html: `<div style="width:24px;height:64px;color:${color};transform:rotate(${rotacion}deg) scale(${escala});transform-origin:center center;">${crearIconoSVG()}</div>`,
@@ -444,7 +436,7 @@ export default function MapaFlota({
         popupAnchor: [0, -44],
       });
       const popupTexto = destinoNombre
-        ? `<div style="font-family:system-ui,sans-serif;min-width:140px"><div style="font-size:12px;font-weight:700;color:#15803D;margin-bottom:2px">📍 Destino</div><div style="font-size:12px;color:#1E293B;line-height:1.4">${destinoNombre}</div></div>`
+        ? `<div style="font-family:system-ui,sans-serif;min-width:140px"><div style="font-size:12px;font-weight:700;color:#15803D;margin-bottom:2px">📍 Destino</div><div style="font-size:12px;color:#1E293B;line-height:1.4">${escapeHtml(destinoNombre)}</div></div>`
         : `<div style="font-family:system-ui,sans-serif;font-size:13px;font-weight:700;color:#15803D">📍 Punto de destino</div>`;
       if (destinoMarkerRef.current) {
         destinoMarkerRef.current.setLatLng(pos);

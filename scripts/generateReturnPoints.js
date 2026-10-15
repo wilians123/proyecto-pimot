@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Este script legado se ejecuta en CommonJS con Node. */
 const fs = require("fs");
 const path = require("path");
 
@@ -38,8 +39,8 @@ const ROUTE_OUT = path.join(
   "route_return.json",
 );
 
-const PUERTO_BARRIOS_LAT = 15.69455;
-const PUERTO_BARRIOS_LNG = -88.57833;
+const PUERTO_BARRIOS_LAT = 15.640187;
+const PUERTO_BARRIOS_LNG = -88.546492;
 const RADIO_LLEGADA_M = 75;
 const RADIO_SALIDA_M = 120;
 const RADIO_RETORNO_M = 150;
@@ -62,7 +63,6 @@ if (!Array.isArray(points) || points.length === 0) {
 const reversed = points.slice().reverse();
 
 // Ensure timestamps progress forward starting from now in 10s increments
-const startTs = new Date().toISOString();
 const startDate = new Date();
 
 const outPoints = reversed.map((p, idx) => {

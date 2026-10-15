@@ -313,6 +313,7 @@ export interface Database {
           bloqueado: boolean;
           lecturas_inicio_confirm: number;
           lecturas_fuera_destino: number;
+          transiciones_inferidas: string[];
           deleted_at: string | null;
           created_at: string;
           updated_at: string;
@@ -346,6 +347,7 @@ export interface Database {
           bloqueado?: boolean;
           lecturas_inicio_confirm?: number;
           lecturas_fuera_destino?: number;
+          transiciones_inferidas?: string[];
           deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -378,6 +380,7 @@ export interface Database {
           bloqueado?: boolean;
           lecturas_inicio_confirm?: number;
           lecturas_fuera_destino?: number;
+          transiciones_inferidas?: string[];
           deleted_at?: string | null;
           updated_at?: string;
         };
@@ -747,6 +750,121 @@ export interface Database {
         };
         Relationships: [];
       };
+
+      geofence_config: {
+        Row: {
+          radio_inicio_m: number;
+          radio_llegada_m: number;
+          radio_salida_m: number;
+          radio_retorno_m: number;
+          lecturas_para_inicio: number;
+          lecturas_para_salida: number;
+          velocidad_max_plausible_kmh: number;
+          tolerancia_ruido_m: number;
+          max_descartes_consecutivos: number;
+        };
+        Insert: {
+          radio_inicio_m?: number;
+          radio_llegada_m?: number;
+          radio_salida_m?: number;
+          radio_retorno_m?: number;
+          lecturas_para_inicio?: number;
+          lecturas_para_salida?: number;
+          velocidad_max_plausible_kmh?: number;
+          tolerancia_ruido_m?: number;
+          max_descartes_consecutivos?: number;
+        };
+        Update: {
+          radio_inicio_m?: number;
+          radio_llegada_m?: number;
+          radio_salida_m?: number;
+          radio_retorno_m?: number;
+          lecturas_para_inicio?: number;
+          lecturas_para_salida?: number;
+          velocidad_max_plausible_kmh?: number;
+          tolerancia_ruido_m?: number;
+          max_descartes_consecutivos?: number;
+        };
+        Relationships: [];
+      };
+      geofence_viaje_estado: {
+        Row: {
+          viaje_id: string;
+          ultima_lat: number | null;
+          ultima_lng: number | null;
+          ultima_lectura_at: string | null;
+          ultima_velocidad_kmh: number | null;
+          descartes_consecutivos: number;
+          descartes_total: number;
+          en_origen_visto: boolean;
+          max_dist_origen_m: number;
+          updated_at: string;
+        };
+        Insert: {
+          viaje_id: string;
+          ultima_lat?: number | null;
+          ultima_lng?: number | null;
+          ultima_lectura_at?: string | null;
+          ultima_velocidad_kmh?: number | null;
+          descartes_consecutivos?: number;
+          descartes_total?: number;
+          en_origen_visto?: boolean;
+          max_dist_origen_m?: number;
+          updated_at?: string;
+        };
+        Update: {
+          ultima_lat?: number | null;
+          ultima_lng?: number | null;
+          ultima_lectura_at?: string | null;
+          ultima_velocidad_kmh?: number | null;
+          descartes_consecutivos?: number;
+          descartes_total?: number;
+          en_origen_visto?: boolean;
+          max_dist_origen_m?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      geofence_eventos: {
+        Row: {
+          viaje_id: string;
+          tracker_id: number | null;
+          tipo: "lectura_descartada" | "rebase_tras_descartes" | "transicion_inferida";
+          estado_desde: string | null;
+          estado_hasta: string | null;
+          lat: number | null;
+          lng: number | null;
+          distancia_m: number | null;
+          velocidad_kmh: number | null;
+          detalle: Json;
+          created_at: string;
+        };
+        Insert: {
+          viaje_id: string;
+          tracker_id?: number | null;
+          tipo: "lectura_descartada" | "rebase_tras_descartes" | "transicion_inferida";
+          estado_desde?: string | null;
+          estado_hasta?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+          distancia_m?: number | null;
+          velocidad_kmh?: number | null;
+          detalle?: Json;
+          created_at?: string;
+        };
+        Update: {
+          tracker_id?: number | null;
+          tipo?: "lectura_descartada" | "rebase_tras_descartes" | "transicion_inferida";
+          estado_desde?: string | null;
+          estado_hasta?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+          distancia_m?: number | null;
+          velocidad_kmh?: number | null;
+          detalle?: Json;
+        };
+        Relationships: [];
+      };
     };
 
     Views: Record<string, never>;
@@ -768,6 +886,30 @@ export interface Database {
           p_fecha_timestamp?: string;
         };
         Returns: Json;
+      };
+      geofence_registrar_lectura: {
+        Args: {
+          p_viaje_id: string;
+          p_lat: number;
+          p_lng: number;
+          p_ts?: string;
+          p_tracker_id?: number;
+        };
+        Returns: Json;
+      };
+      geofence_parametros_viaje: {
+        Args: { p_viaje_id: string };
+        Returns: Array<{
+          radio_inicio_m: number;
+          radio_llegada_m: number;
+          radio_salida_m: number;
+          radio_retorno_m: number;
+          lecturas_para_inicio: number;
+          lecturas_para_salida: number;
+          velocidad_max_plausible_kmh: number;
+          tolerancia_ruido_m: number;
+          max_descartes_consecutivos: number;
+        }>;
       };
       incrementar_lecturas_fuera_destino: {
         Args: { p_viaje_id: string };

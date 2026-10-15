@@ -1,6 +1,7 @@
 // simulateTrip.js
 // Intención: simular el viaje leyendo las constantes desde src/hooks/useGeofence.ts y aplicando la lógica de geofence.
 // No modifica useGeofence.ts; extrae constantes como fuente de verdad.
+/* eslint-disable @typescript-eslint/no-require-imports -- Este script legado se ejecuta en CommonJS con Node. */
 const fs = require("fs");
 const path = require("path");
 
@@ -38,8 +39,8 @@ function extractNumber(name) {
   return Number(m[1]);
 }
 // constants per rule; fallback to extraction
-let PUERTO_BARRIOS_LAT = 15.69455;
-let PUERTO_BARRIOS_LNG = -88.57833;
+let PUERTO_BARRIOS_LAT = 15.640187;
+let PUERTO_BARRIOS_LNG = -88.546492;
 let RADIO_INICIO_M = 150;
 let RADIO_LLEGADA_M = 75;
 let RADIO_SALIDA_M = 120;

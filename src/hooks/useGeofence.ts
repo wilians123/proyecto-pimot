@@ -1,65 +1,39 @@
 import { useMemo } from "react";
-import { evaluarGeofence, type TransicionEstado } from "@/lib/geofence";
-
-export type { TransicionEstado };
+import { haversineMetros, ORIGEN_PIMOT } from "@/lib/geofence";
 
 interface UseGeofenceParams {
   trackerLat: number | null;
   trackerLng: number | null;
-  estadoActual: string;
-  origenLat?: number | null;
-  origenLng?: number | null;
   destinoLat: number | null;
   destinoLng: number | null;
-  bloqueado: boolean;
-  lecturasFueraDestino: number;
-  lecturasInicioConfirm: number;
 }
 
 interface UseGeofenceResult {
-  transicion: TransicionEstado | null;
   distanciaDestinoM: number | null;
   distanciaOrigenM: number | null;
-  distanciaPuertoBarriosM: number | null;
 }
 
 export function useGeofence({
   trackerLat,
   trackerLng,
-  estadoActual,
-  origenLat,
-  origenLng,
   destinoLat,
   destinoLng,
-  bloqueado,
-  lecturasFueraDestino,
-  lecturasInicioConfirm,
 }: UseGeofenceParams): UseGeofenceResult {
-  return useMemo(
-    () =>
-      evaluarGeofence({
+  return useMemo(() => {
+    if (trackerLat === null || trackerLng === null) {
+      return { distanciaDestinoM: null, distanciaOrigenM: null };
+    }
+    return {
+      distanciaOrigenM: haversineMetros(
         trackerLat,
         trackerLng,
-        estadoActual,
-        origenLat,
-        origenLng,
-        destinoLat,
-        destinoLng,
-        bloqueado,
-        lecturasFueraDestino,
-        lecturasInicioConfirm,
-      }),
-    [
-      trackerLat,
-      trackerLng,
-      estadoActual,
-      origenLat,
-      origenLng,
-      destinoLat,
-      destinoLng,
-      bloqueado,
-      lecturasFueraDestino,
-      lecturasInicioConfirm,
-    ],
-  );
+        ORIGEN_PIMOT.lat,
+        ORIGEN_PIMOT.lng,
+      ),
+      distanciaDestinoM:
+        destinoLat === null || destinoLng === null
+          ? null
+          : haversineMetros(trackerLat, trackerLng, destinoLat, destinoLng),
+    };
+  }, [trackerLat, trackerLng, destinoLat, destinoLng]);
 }

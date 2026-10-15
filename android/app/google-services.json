@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "688073762182",
+    "project_id": "pimot-175ef",
+    "storage_bucket": "pimot-175ef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:688073762182:android:c4e7fe31eff8043c9c7807",
+        "android_client_info": {
+          "package_name": "com.pimot.app"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "AIzaSyAaSql5E4YAFjlhDHbws5XSJ1IeSrwoqT8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

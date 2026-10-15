@@ -15,6 +15,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { hasRole } from "@/lib/server-auth";
+import { normalizarRumbo } from "@/utils/rumbo";
+import { registrarClavesGpsUnaVez } from "@/utils/navixy-diagnostic";
 
 // Tipos del response de Navixy
 interface NavixyGpsLocation {
@@ -26,6 +28,7 @@ interface NavixyTrackerState {
   gps?: {
     location?: NavixyGpsLocation;
     speed?: number;
+    heading?: number;
   };
   movement_status?: "moving" | "parked" | "stopped";
   ignition?: boolean;
@@ -48,6 +51,7 @@ export interface TrackerEstado {
   encendido: boolean;
   bateria: number | null;
   ultima_actualizacion: string | null;
+  heading: number | null;
 }
 
 const NAVIXY_BASE = "https://api.us.navixy.com/v2";
@@ -114,6 +118,8 @@ export async function GET(request: Request): Promise<NextResponse> {
       );
     }
 
+    registrarClavesGpsUnaVez(Object.values(json.states)[0]?.gps);
+
     // Normalizar al formato interno
     const estados: TrackerEstado[] = Object.entries(json.states).map(
       ([idStr, state]) => ({
@@ -125,15 +131,15 @@ export async function GET(request: Request): Promise<NextResponse> {
         encendido: state.ignition ?? false,
         bateria: state.battery_level ?? null,
         ultima_actualizacion: state.last_update ?? null,
+        heading: normalizarRumbo(state.gps?.heading),
       }),
     );
 
-    // Cache de 15 segundos en Vercel Edge — evita sobrecargar Navixy
     return NextResponse.json(
       { estados },
       {
         headers: {
-          "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
+          "Cache-Control": "private, no-store",
         },
       },
     );
