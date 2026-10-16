@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { convertirTimestampGps } from "@/lib/navixy-time";
 import {
   procesarGeofenceViajes,
   type TrackerGeofenceState,
@@ -17,6 +18,7 @@ interface NavixyState {
 
 interface NavixyStatesResponse {
   success: boolean;
+  user_time?: string;
   states: Record<string, NavixyState>;
 }
 
@@ -75,17 +77,11 @@ async function cargarTrackers(): Promise<{
         lat: state.gps?.location?.lat ?? null,
         lng: state.gps?.location?.lng ?? null,
         velocidad: state.gps?.speed ?? null,
-        ultima_senal_at: convertirTimestampGps(state.last_update),
+        ultima_senal_at: convertirTimestampGps(state.last_update, json.user_time),
       };
     }),
     error: null,
   };
-}
-
-export function convertirTimestampGps(timestamp: string | null | undefined): string | null {
-  if (!timestamp) return null;
-  const ms = Date.parse(timestamp);
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {

@@ -145,6 +145,9 @@ export default function Dashboard() {
   const { profile } = useAuth();
   const { viajes, loading: viajesLoading } = useViajes();
   const { alertas: alertasActivas, loading: alertasLoading } = useAlertas(true);
+  const alertasMasRecientes = [...alertasActivas]
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+    .slice(0, 3);
   const { stats, loading: statsLoading } = useStats();
   const { stats: operationalStats, loading: operationalLoading } =
     useDashboardOperationalStats();
@@ -323,7 +326,7 @@ export default function Dashboard() {
                 Sin alertas activas
               </p>
             ) : (
-              alertasActivas.map((alerta) => (
+              alertasMasRecientes.map((alerta) => (
                 <AlertaBadge key={alerta.id} alerta={alertaAResumen(alerta)} />
               ))
             )}

@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
 
+const INTERVALO_ACTUALIZACION_ALERTAS_MS = 15_000
+
 type AlertaRow = Database['public']['Tables']['alertas']['Row']
 
 export interface AlertaConViaje extends AlertaRow {
@@ -109,12 +111,22 @@ export function useAlertas(soloActivas = false) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'alertas' },
-        () => { if (active) refetch() }
+        () => { if (active) void refetch() }
       )
-      .subscribe()
+      .subscribe((status) => {
+        // Recupera posibles cambios ocurridos mientras el canal se conectaba.
+        if (active && status === 'SUBSCRIBED') void refetch()
+      })
+
+    // Mantiene la interfaz al día incluso si Realtime no está habilitado en
+    // la publicación de Supabase o si la conexión del canal se interrumpe.
+    const refreshInterval = window.setInterval(() => {
+      if (active) void refetch()
+    }, INTERVALO_ACTUALIZACION_ALERTAS_MS)
 
     return () => {
       active = false
+      window.clearInterval(refreshInterval)
       supabase.removeChannel(channel)
     }
   }, [refetch, soloActivas])
