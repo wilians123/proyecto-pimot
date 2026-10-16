@@ -158,6 +158,9 @@ export default function Dashboard() {
         viaje.estado,
       ),
   );
+  const viajesEnOperacion = viajesActivos.filter((viaje) =>
+    ["en_transito", "en_destino", "de_vuelta"].includes(viaje.estado),
+  );
   const proximoViajeProgramado = viajesActivos
     .filter((viaje) => viaje.estado === "programado" && viaje.fecha_inicio)
     .sort(
@@ -206,12 +209,12 @@ export default function Dashboard() {
               Activos
             </p>
             <p className="text-3xl font-black text-blue-600 tabular-nums leading-none mt-1">
-              {statsLoading ? "—" : (stats?.en_transito ?? 0)}
+              {viajesLoading ? "—" : viajesEnOperacion.length}
             </p>
             <p className="text-xs text-slate-400 mt-1 hidden sm:block">
-              {statsLoading
+              {viajesLoading
                 ? "Cargando…"
-                : `${stats?.en_transito ?? viajesActivos.length} en tránsito`}
+                : "En tránsito, destino o de vuelta"}
             </p>
           </div>
         </div>
