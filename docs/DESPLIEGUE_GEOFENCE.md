@@ -86,11 +86,12 @@ Remove-Item Env:GEOFENCE_IT, Env:GEOFENCE_IT_CONFIRM_NO_WEBHOOK
 ## Orden recomendado
 
 1. Aplicar en Supabase la migración `202610160001_geofence_evidencia_y_alertas_asignadas.sql`.
-2. Desplegar la aplicación; esta versión utiliza el RPC `geofence_actualizar_evidencia` creado por la migración.
-3. Verificar manualmente `POST /api/geofence/process` con el secreto.
-4. Programar el cron de `pg_cron`.
-5. Configurar el Database Webhook.
-6. Validar el flujo con un viaje real controlado.
+2. Aplicar en Supabase la migración `202610160002_alertas_inactividad_escalonadas.sql` para generar los avisos progresivos a los 10, 20 y 30 minutos.
+3. Desplegar la aplicación; esta versión utiliza los RPC creados por las migraciones.
+4. Verificar manualmente `POST /api/geofence/process` con el secreto.
+5. Programar el cron de `pg_cron`.
+6. Configurar el Database Webhook.
+7. Validar el flujo con un viaje real controlado.
 
 ## Validaciones posteriores y reversa
 
@@ -101,7 +102,7 @@ Remove-Item Env:GEOFENCE_IT, Env:GEOFENCE_IT_CONFIRM_NO_WEBHOOK
 
 ## Pendientes de producto
 
-Los generadores de alertas por velocidad excesiva, retraso operativo e inactividad prolongada no están implementados. Esos tipos de alerta quedan fuera de esta fase.
+Los generadores de alertas por velocidad excesiva y retraso operativo no están implementados. La alerta de inactividad prolongada solo aplica a viajes `en_transito`: avisa a los 10, 20 y 30 minutos sin señal, una vez por cada escalón, y se resuelve al recuperar señal GPS reciente.
 
 ## Endurecimiento posterior al despliegue
 

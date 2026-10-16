@@ -15,7 +15,7 @@ const ESTADOS_POR_ALERTA: Record<string, string[]> = {
   finalizacion_viaje: ["finalizado"],
   velocidad_excesiva: ["en_transito", "en_destino", "de_vuelta"],
   retraso_operativo: ["en_transito", "en_destino", "de_vuelta"],
-  inactividad_prolongada: ["en_transito", "en_destino", "de_vuelta"],
+  inactividad_prolongada: ["en_transito"],
 };
 
 export async function POST(req: Request) {

@@ -12,6 +12,7 @@ interface NavixyState {
     speed?: number;
     heading?: number;
   };
+  last_update?: string | null;
 }
 
 interface NavixyStatesResponse {
@@ -74,10 +75,17 @@ async function cargarTrackers(): Promise<{
         lat: state.gps?.location?.lat ?? null,
         lng: state.gps?.location?.lng ?? null,
         velocidad: state.gps?.speed ?? null,
+        ultima_senal_at: convertirTimestampGps(state.last_update),
       };
     }),
     error: null,
   };
+}
+
+export function convertirTimestampGps(timestamp: string | null | undefined): string | null {
+  if (!timestamp) return null;
+  const ms = Date.parse(timestamp);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {

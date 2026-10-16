@@ -798,6 +798,8 @@ export interface Database {
           descartes_total: number;
           en_origen_visto: boolean;
           max_dist_origen_m: number;
+          inactividad_alertada_desde: string | null;
+          inactividad_etapa_alerta: number;
           updated_at: string;
         };
         Insert: {
@@ -810,6 +812,8 @@ export interface Database {
           descartes_total?: number;
           en_origen_visto?: boolean;
           max_dist_origen_m?: number;
+          inactividad_alertada_desde?: string | null;
+          inactividad_etapa_alerta?: number;
           updated_at?: string;
         };
         Update: {
@@ -821,6 +825,8 @@ export interface Database {
           descartes_total?: number;
           en_origen_visto?: boolean;
           max_dist_origen_m?: number;
+          inactividad_alertada_desde?: string | null;
+          inactividad_etapa_alerta?: number;
           updated_at?: string;
         };
         Relationships: [];
@@ -904,6 +910,10 @@ export interface Database {
           p_max_dist_origen_m: number;
         };
         Returns: boolean;
+      };
+      geofence_verificar_inactividad_viaje: {
+        Args: { p_viaje_id: string; p_ultima_senal_at: string };
+        Returns: Json;
       };
       geofence_parametros_viaje: {
         Args: { p_viaje_id: string };

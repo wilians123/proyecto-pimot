@@ -92,6 +92,14 @@ export default function Alertas() {
           </button>
         )}
       </div>
+      {rol === "admin" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+          <h3 className="font-bold text-slate-800">Escalamiento por falta de señal</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            En viajes en tránsito se envía una alerta a los 10 minutos, un recordatorio a los 20 y un aviso prioritario a los 30 minutos sin señal GPS.
+          </p>
+        </section>
+      )}
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">

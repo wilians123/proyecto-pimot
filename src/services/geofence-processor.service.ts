@@ -15,6 +15,7 @@ export interface TrackerGeofenceState {
   lat: number | null;
   lng: number | null;
   velocidad?: number | null;
+  ultima_senal_at?: string | null;
 }
 
 type EstadoActivo = (typeof ESTADOS_ACTIVOS)[number];
@@ -53,6 +54,7 @@ export interface GeofenceProcessEvent {
     | "contador"
     | "sin_cambio"
     | "lectura_descartada"
+    | "alerta_generada"
     | "sin_tracker"
     | "sin_posicion"
     | "cabezal_ocupado"
@@ -292,6 +294,46 @@ export async function procesarGeofenceViajes(
         distanciaDestinoM: null,
       });
       continue;
+    }
+    if (viaje.estado === "en_transito" && tracker.ultima_senal_at) {
+      const { data: inactividadData, error: inactividadError } = await supabase.rpc(
+        "geofence_verificar_inactividad_viaje",
+        {
+          p_viaje_id: viaje.id,
+          p_ultima_senal_at: tracker.ultima_senal_at,
+        },
+      );
+      const inactividadJson = inactividadData as Json | null;
+      const error = errorRpc(inactividadJson, inactividadError);
+      const inactividad = inactividadJson as {
+        alerta_generada?: boolean;
+        etapa_alerta?: number;
+        minutos_sin_senal?: number;
+        senal_recuperada?: boolean;
+        error?: string;
+      } | null;
+      if (error || inactividad?.error) {
+        eventos.push({
+          viajeId: viaje.id,
+          estadoAnterior: viaje.estado,
+          accion: "error",
+          motivo: "verificar_inactividad",
+          inferidas: [],
+          distanciaOrigenM: null,
+          distanciaDestinoM: null,
+          error: error ?? inactividad?.error,
+        });
+      } else if (inactividad?.alerta_generada) {
+        eventos.push({
+          viajeId: viaje.id,
+          estadoAnterior: viaje.estado,
+          accion: "alerta_generada",
+          motivo: `inactividad_prolongada_etapa_${inactividad.etapa_alerta ?? 0}_${inactividad.minutos_sin_senal ?? 0}_minutos`,
+          inferidas: [],
+          distanciaOrigenM: null,
+          distanciaDestinoM: null,
+        });
+      }
     }
     if (tracker.lat === null || tracker.lng === null) {
       eventos.push({
