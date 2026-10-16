@@ -129,7 +129,7 @@ function AppShellContent() {
             onNavigateToAlertas={() => cambiarModulo("alertas")}
             notificationsOpen={notificationsOpen}
           />
-          <main className="flex-1 overflow-y-auto">{renderModulo()}</main>
+          <main className="flex-1 overflow-y-auto isolate">{renderModulo()}</main>
         </div>
       </div>
   );
