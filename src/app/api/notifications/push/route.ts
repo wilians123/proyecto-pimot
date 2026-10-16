@@ -44,12 +44,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    const messaging = getFirebaseMessaging();
     const deps: PushDeps = {
       cargarAlerta: async (id) => {
-        const { data: alerta, error } = await supabaseAdmin.from("alertas").select("id, tipo, nivel, mensaje, estado, viaje_id").eq("id", id).maybeSingle();
+        const { data: alerta, error } = await supabaseAdmin.from("alertas").select("id, tipo, nivel, mensaje, estado, viaje_id, canal_push").eq("id", id).maybeSingle();
         if (error) throw error;
         if (!alerta) return null;
+        if (!alerta.canal_push) return alerta as Database["public"]["Tables"]["alertas"]["Row"] | null;
         const estadosValidos = ESTADOS_POR_ALERTA[alerta.tipo];
         if (estadosValidos) {
           if (!alerta.viaje_id) return null;
@@ -98,6 +98,7 @@ export async function POST(req: Request) {
         if (error) throw error;
       },
       enviarLote: async (mensajes) => {
+        const messaging = getFirebaseMessaging();
         const response = await messaging.sendEach(mensajes);
         return response.responses.map((item) => ({ success: item.success, messageId: item.messageId, error: item.error ? { code: item.error.code } : undefined }));
       },

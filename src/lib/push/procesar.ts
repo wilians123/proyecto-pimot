@@ -3,7 +3,7 @@ import { clasificarErrorFcm } from "./errores";
 import { construirContenido, type Contenido } from "./contenido";
 import { construirMensaje, type PushMessage } from "./mensajes";
 
-type Alerta = Pick<Database["public"]["Tables"]["alertas"]["Row"], "id" | "tipo" | "nivel" | "mensaje" | "estado" | "viaje_id">;
+type Alerta = Pick<Database["public"]["Tables"]["alertas"]["Row"], "id" | "tipo" | "nivel" | "mensaje" | "estado" | "viaje_id" | "canal_push">;
 type Profile = Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "rol" | "activo">;
 type Dispositivo = Pick<Database["public"]["Tables"]["dispositivos_push"]["Row"], "id" | "user_id" | "token" | "plataforma">;
 type Log = Pick<Database["public"]["Tables"]["notificaciones_push_log"]["Row"], "dispositivo_id" | "estado">;
@@ -20,6 +20,7 @@ export interface PushResumen {
   fallidos: number;
   invalidos: number;
   omitidos: number;
+  motivo_omitido?: "canal_push_desactivado";
 }
 
 export interface PushDeps {
@@ -45,6 +46,18 @@ const contenidoTest: Contenido = {
 export async function procesarPush(deps: PushDeps, entrada: PushEntrada): Promise<PushResumen | ProcesarError> {
   const alerta = entrada.modo === "webhook" ? await deps.cargarAlerta(entrada.alertaId) : null;
   if (entrada.modo === "webhook" && !alerta) return { ok: false, code: "alerta_no_encontrada" };
+  if (entrada.modo === "webhook" && alerta && !alerta.canal_push) {
+    return {
+      ok: true,
+      alerta_id: entrada.alertaId,
+      destinatarios: 0,
+      enviados: 0,
+      fallidos: 0,
+      invalidos: 0,
+      omitidos: 0,
+      motivo_omitido: "canal_push_desactivado",
+    };
+  }
 
   const perfiles = await deps.cargarDestinatarios(entrada.modo === "test" ? entrada.userId : undefined);
   const userIds = perfiles.filter((p) => p.activo && (p.rol === "admin" || p.rol === "operativo")).map((p) => p.id);

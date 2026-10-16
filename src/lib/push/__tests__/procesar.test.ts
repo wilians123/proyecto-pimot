@@ -2,7 +2,7 @@ import { procesarPush, type PushDeps } from "../procesar";
 
 const perfil = (id: string, rol: "admin" | "operativo" | "visualizador", activo = true) => ({ id, rol, activo });
 const dispositivo = (id: string, user_id: string, plataforma: "web" | "android" | "ios" = "web") => ({ id, user_id, token: `${id}-token-abcdefghijklmnopqrstuvwxyz`, plataforma });
-const alerta = { id: "a1", tipo: "inicio_viaje", nivel: "info", mensaje: "m", estado: "pendiente", viaje_id: null } as const;
+const alerta = { id: "a1", tipo: "inicio_viaje", nivel: "info", mensaje: "m", estado: "pendiente", viaje_id: null, canal_push: true } as const;
 
 function makeDeps(overrides: Partial<PushDeps> = {}) {
   const logs: Array<Record<string, unknown>> = [];
@@ -32,6 +32,24 @@ describe("procesarPush", () => {
     const { deps } = makeDeps({ cargarAlerta: async () => null, enviarLote: jest.fn() });
     expect(await procesarPush(deps, { modo: "webhook", alertaId: "missing" })).toEqual({ ok: false, code: "alerta_no_encontrada" });
     expect(deps.enviarLote).not.toHaveBeenCalled();
+  });
+  test("omite alertas con canal_push desactivado y confirma el webhook", async () => {
+    const cargarDestinatarios = jest.fn(async () => [perfil("u1", "admin")]);
+    const enviarLote = jest.fn();
+    const { deps } = makeDeps({
+      cargarAlerta: async () => ({ ...alerta, canal_push: false }),
+      cargarDestinatarios,
+      enviarLote,
+    });
+
+    expect(await procesarPush(deps, { modo: "webhook", alertaId: "a1" })).toMatchObject({
+      ok: true,
+      alerta_id: "a1",
+      enviados: 0,
+      motivo_omitido: "canal_push_desactivado",
+    });
+    expect(cargarDestinatarios).not.toHaveBeenCalled();
+    expect(enviarLote).not.toHaveBeenCalled();
   });
   test("U15/U16: éxito, marcado e idempotencia", async () => {
     const { deps, logs } = makeDeps();
