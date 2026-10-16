@@ -11,7 +11,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { icons } from "@/lib/constants";
 import type { Database } from "@/types/database";
@@ -394,6 +394,7 @@ export default function Viajes() {
   const [loadingActivos, setLoadingActivos] = useState(false);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [viajeSelec, setViajeSelec] = useState<ViajeCompleto | null>(null);
+  const viajeSelecIdRef = useRef<string | null>(null);
 
   // ── Catálogos para el formulario ──────────────────────────────
   const [pilotos, setPilotos] = useState<PilotoRow[]>([]);
@@ -484,7 +485,27 @@ export default function Viajes() {
       console.error("[Viajes] Error refetch activos:", error.message);
       return;
     }
-    if (data) setViajesActivos(data as unknown as ViajeCompleto[]);
+    if (!data) return;
+
+    const viajes = data as unknown as ViajeCompleto[];
+    setViajesActivos(viajes);
+
+    const viajeSeleccionadoId = viajeSelecIdRef.current;
+    if (!viajeSeleccionadoId) return;
+
+    const { data: seleccionado, error: errorSeleccionado } = await supabase
+      .from("viajes")
+      .select(SELECT_VIAJE)
+      .eq("id", viajeSeleccionadoId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (errorSeleccionado) {
+      console.error("[Viajes] Error actualizando viaje seleccionado:", errorSeleccionado.message);
+      return;
+    }
+    if (viajeSelecIdRef.current === viajeSeleccionadoId) {
+      setViajeSelec(seleccionado as unknown as ViajeCompleto | null);
+    }
   }, []);
 
   const cargarViajesUnidadesActivas = useCallback(async () => {
@@ -507,24 +528,35 @@ export default function Viajes() {
 
     async function load() {
       setLoadingActivos(true);
-      const { data, error } = await supabase
-        .from("viajes")
-        .select(SELECT_VIAJE)
-        .in("estado", ["programado", "en_transito", "en_destino", "de_vuelta"])
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false });
-
-      if (!active) return;
-      if (error) console.error("[Viajes] Error carga activos:", error.message);
-      if (data) setViajesActivos(data as unknown as ViajeCompleto[]);
-      setLoadingActivos(false);
+      await refetchActivos();
+      if (active) setLoadingActivos(false);
     }
 
     load();
     return () => {
       active = false;
     };
-  }, [tab]);
+  }, [tab, refetchActivos]);
+
+  useEffect(() => {
+    if (tab !== "activos") return;
+    const channel = supabase
+      .channel("viajes-activos-estado")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "viajes" },
+        () => { void refetchActivos(); },
+      )
+      .subscribe();
+    const interval = window.setInterval(() => {
+      void refetchActivos();
+    }, 15_000);
+
+    return () => {
+      window.clearInterval(interval);
+      void supabase.removeChannel(channel);
+    };
+  }, [tab, refetchActivos]);
 
   // ── Carga de historial ────────────────────────────────────────
   useEffect(() => {
@@ -1121,6 +1153,7 @@ export default function Viajes() {
                     <div
                       key={v.id}
                       onClick={() => {
+                        viajeSelecIdRef.current = v.id;
                         setViajeSelec(v);
                         setNuevoEstado("");
                         setErrorEstado(null);

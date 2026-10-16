@@ -8,6 +8,16 @@ import type { Database } from "@/types/database";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const ESTADOS_POR_ALERTA: Record<string, string[]> = {
+  inicio_viaje: ["en_transito"],
+  llegada_destino: ["en_destino"],
+  retorno_viaje: ["de_vuelta"],
+  finalizacion_viaje: ["finalizado"],
+  velocidad_excesiva: ["en_transito", "en_destino", "de_vuelta"],
+  retraso_operativo: ["en_transito", "en_destino", "de_vuelta"],
+  inactividad_prolongada: ["en_transito", "en_destino", "de_vuelta"],
+};
+
 export async function POST(req: Request) {
   const esperado = process.env.PUSH_WEBHOOK_SECRET;
   if (!esperado) return NextResponse.json({ error: "Configuración incompleta" }, { status: 500 });
@@ -39,6 +49,18 @@ export async function POST(req: Request) {
       cargarAlerta: async (id) => {
         const { data: alerta, error } = await supabaseAdmin.from("alertas").select("id, tipo, nivel, mensaje, estado, viaje_id").eq("id", id).maybeSingle();
         if (error) throw error;
+        if (!alerta) return null;
+        const estadosValidos = ESTADOS_POR_ALERTA[alerta.tipo];
+        if (estadosValidos) {
+          if (!alerta.viaje_id) return null;
+          const { data: viaje, error: errorViaje } = await supabaseAdmin
+            .from("viajes")
+            .select("cabezal_id, estado")
+            .eq("id", alerta.viaje_id)
+            .maybeSingle();
+          if (errorViaje) throw errorViaje;
+          if (!viaje?.cabezal_id || !estadosValidos.includes(viaje.estado)) return null;
+        }
         return alerta as Database["public"]["Tables"]["alertas"]["Row"] | null;
       },
       cargarDestinatarios: async (userId) => {

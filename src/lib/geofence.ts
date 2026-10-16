@@ -58,6 +58,7 @@ export interface ParametrosGeofence {
 export interface EvaluarGeofenceInput {
   estado: (typeof ESTADOS_ACTIVOS)[number];
   actual: Coordenada;
+  origen?: Coordenada | null;
   previa: Coordenada | null;
   dtSegundos: number | null;
   destino: Coordenada | null;
@@ -72,6 +73,7 @@ export type MotivoGeofence =
   | "llegada_sin_origen"
   | "llegada_destino"
   | "salida_origen"
+  | "salida_origen_inferida"
   | "confirmando_salida"
   | "en_origen"
   | "esperando_origen"
@@ -143,6 +145,7 @@ export function evaluarGeofencePuro(
   const {
     estado,
     actual,
+    origen = ORIGEN_PIMOT,
     previa,
     dtSegundos,
     destino,
@@ -152,11 +155,12 @@ export function evaluarGeofencePuro(
     enOrigenVisto,
     maxDistOrigenM,
   } = input;
+  const origenEfectivo = origen ?? ORIGEN_PIMOT;
   const distanciaOrigenPuntoM = haversineMetros(
     actual.lat,
     actual.lng,
-    ORIGEN_PIMOT.lat,
-    ORIGEN_PIMOT.lng,
+    origenEfectivo.lat,
+    origenEfectivo.lng,
   );
   const usarSegmento =
     previa !== null &&
@@ -166,7 +170,7 @@ export function evaluarGeofencePuro(
   const distanciaOrigenEvidenciaM = usarSegmento
     ? Math.min(
         distanciaOrigenPuntoM,
-        distanciaMinimaSegmentoM(previa, actual, ORIGEN_PIMOT),
+        distanciaMinimaSegmentoM(previa, actual, origenEfectivo),
       )
     : distanciaOrigenPuntoM;
   const distanciaDestinoPuntoM = destino
@@ -193,8 +197,8 @@ export function evaluarGeofencePuro(
     distanciaDestinoPuntoM > params.radioSalidaM;
   const rutaM = destino
     ? haversineMetros(
-        ORIGEN_PIMOT.lat,
-        ORIGEN_PIMOT.lng,
+        origenEfectivo.lat,
+        origenEfectivo.lng,
         destino.lat,
         destino.lng,
       )
@@ -203,7 +207,15 @@ export function evaluarGeofencePuro(
   const progreso =
     rutaM >= RUTA_MIN_PARA_PROGRESO_M &&
     maxDist >= PROGRESO_MIN_FRACCION * rutaM;
-  const armado = enOrigenVisto || enOrigen;
+  // El máximo persistido funciona como evidencia de recuperación cuando una
+  // lectura del origen se perdió, pero lecturas GPS aceptadas ya demuestran
+  // que la unidad salió de su radio. La confirmación de salida evita iniciar
+  // por una única lectura aislada.
+  const salidaInferida = estado === "programado" &&
+    !enOrigenVisto &&
+    !enOrigen &&
+    maxDistOrigenM > params.radioInicioM + params.toleranciaRuidoM;
+  const armado = enOrigenVisto || enOrigen || salidaInferida;
   const resultadoBase = {
     lecturasInicioConfirm,
     lecturasFueraDestino,
@@ -236,7 +248,7 @@ export function evaluarGeofencePuro(
           return {
             ...resultadoBase,
             objetivo: "en_transito",
-            motivo: "salida_origen",
+            motivo: salidaInferida ? "salida_origen_inferida" : "salida_origen",
             lecturasInicioConfirm: contador,
           };
         }
@@ -320,6 +332,10 @@ export function evaluarGeofence(input: EvaluarGeofenceParams): EvaluarGeofenceRe
       ? (input.estadoActual as (typeof ESTADOS_ACTIVOS)[number])
       : "programado",
     actual: { lat: input.trackerLat, lng: input.trackerLng },
+    origen: input.origenLat === null || input.origenLat === undefined ||
+      input.origenLng === null || input.origenLng === undefined
+      ? ORIGEN_PIMOT
+      : { lat: input.origenLat, lng: input.origenLng },
     previa: null,
     dtSegundos: null,
     destino: input.destinoLat === null || input.destinoLng === null

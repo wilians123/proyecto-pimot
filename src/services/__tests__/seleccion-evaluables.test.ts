@@ -13,6 +13,8 @@ const viaje = (
   cabezal_id,
   fecha_inicio,
   fecha_estimada: null,
+  lat_origen: null,
+  lng_origen: null,
   radio_destino_metros: 500,
   lat_destino: null,
   lng_destino: null,

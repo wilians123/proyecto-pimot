@@ -83,6 +83,37 @@ describe("evaluarGeofencePuro", () => {
     }))).toMatchObject({ objetivo: null, lecturasInicioConfirm: 0 });
   });
 
+  it("recupera una lectura de origen perdida con evidencia previa de salida", () => {
+    const lejos = norte(ORIGEN_PIMOT, 700);
+    expect(evaluarGeofencePuro(base({
+      actual: lejos,
+      maxDistOrigenM: 700,
+    }))).toMatchObject({
+      objetivo: null,
+      motivo: "confirmando_salida",
+      lecturasInicioConfirm: 1,
+      enOrigenVisto: false,
+    });
+    expect(evaluarGeofencePuro(base({
+      actual: lejos,
+      maxDistOrigenM: 700,
+      lecturasInicioConfirm: 1,
+    }))).toMatchObject({
+      objetivo: "en_transito",
+      motivo: "salida_origen_inferida",
+    });
+  });
+
+  it("usa el origen asignado al viaje en lugar del origen global", () => {
+    const origenAsignado = { lat: 15.7, lng: -88.4 };
+    const result = evaluarGeofencePuro(base({
+      origen: origenAsignado,
+      actual: origenAsignado,
+    }));
+    expect(result).toMatchObject({ objetivo: null, motivo: "en_origen", enOrigenVisto: true });
+    expect(result.distanciaOrigenPuntoM).toBeCloseTo(0, 3);
+  });
+
   it("no arma fuera del origen e infiere llegada aunque nunca lo haya visto", () => {
     const destino = norte(ORIGEN_PIMOT, 6000);
     expect(evaluarGeofencePuro(base({ actual: norte(ORIGEN_PIMOT, 1000) }))).toMatchObject({

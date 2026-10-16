@@ -85,11 +85,12 @@ Remove-Item Env:GEOFENCE_IT, Env:GEOFENCE_IT_CONFIRM_NO_WEBHOOK
 
 ## Orden recomendado
 
-1. Desplegar la aplicación.
-2. Verificar manualmente `POST /api/geofence/process` con el secreto.
-3. Programar el cron de `pg_cron`.
-4. Configurar el Database Webhook.
-5. Validar el flujo con un viaje real controlado.
+1. Aplicar en Supabase la migración `202610160001_geofence_evidencia_y_alertas_asignadas.sql`.
+2. Desplegar la aplicación; esta versión utiliza el RPC `geofence_actualizar_evidencia` creado por la migración.
+3. Verificar manualmente `POST /api/geofence/process` con el secreto.
+4. Programar el cron de `pg_cron`.
+5. Configurar el Database Webhook.
+6. Validar el flujo con un viaje real controlado.
 
 ## Validaciones posteriores y reversa
 

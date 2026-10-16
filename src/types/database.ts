@@ -897,6 +897,14 @@ export interface Database {
         };
         Returns: Json;
       };
+      geofence_actualizar_evidencia: {
+        Args: {
+          p_viaje_id: string;
+          p_en_origen_visto: boolean;
+          p_max_dist_origen_m: number;
+        };
+        Returns: boolean;
+      };
       geofence_parametros_viaje: {
         Args: { p_viaje_id: string };
         Returns: Array<{

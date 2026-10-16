@@ -24,6 +24,8 @@ type ViajeEvaluable = Pick<
   | "id"
   | "estado"
   | "cabezal_id"
+  | "lat_origen"
+  | "lng_origen"
   | "fecha_inicio"
   | "fecha_estimada"
   | "radio_destino_metros"
@@ -197,6 +199,22 @@ function paramsViaje(config: ConfigGeofence, radioDestino: number) {
   };
 }
 
+export function secuenciaTransiciones(
+  estadoActual: EstadoActivo,
+  objetivo: EstadoViaje,
+): EstadoViaje[] {
+  if (estadoActual === "programado" && objetivo === "en_destino") {
+    return ["en_transito", "en_destino"];
+  }
+  if (estadoActual === "en_transito" && objetivo === "finalizado") {
+    return ["en_destino", "de_vuelta", "finalizado"];
+  }
+  if (estadoActual === "en_destino" && objetivo === "finalizado") {
+    return ["de_vuelta", "finalizado"];
+  }
+  return [objetivo];
+}
+
 export async function procesarGeofenceViajes(
   supabase: Db,
   trackers: TrackerGeofenceState[],
@@ -227,7 +245,7 @@ export async function procesarGeofenceViajes(
 
   const { data: viajes, error: viajesError } = await supabase
     .from("viajes")
-    .select("id, estado, cabezal_id, fecha_inicio, fecha_estimada, radio_destino_metros, lat_destino, lng_destino, created_at, lecturas_inicio_confirm, lecturas_fuera_destino")
+    .select("id, estado, cabezal_id, lat_origen, lng_origen, fecha_inicio, fecha_estimada, radio_destino_metros, lat_destino, lng_destino, created_at, lecturas_inicio_confirm, lecturas_fuera_destino")
     .is("deleted_at", null)
     .in("estado", [...ESTADOS_ACTIVOS]);
   if (viajesError) return { eventos, error: viajesError.message };
@@ -337,9 +355,13 @@ export async function procesarGeofenceViajes(
     const destino = viaje.lat_destino === null || viaje.lng_destino === null
       ? null
       : { lat: viaje.lat_destino, lng: viaje.lng_destino };
+    const origen = viaje.lat_origen === null || viaje.lng_origen === null
+      ? null
+      : { lat: viaje.lat_origen, lng: viaje.lng_origen };
     const resultado = evaluarGeofencePuro({
       estado: viaje.estado as EstadoActivo,
       actual: { lat: tracker.lat, lng: tracker.lng },
+      origen,
       previa,
       dtSegundos: previaAt ? (ahora.getTime() - Date.parse(previaAt)) / 1000 : null,
       destino,
@@ -355,20 +377,15 @@ export async function procesarGeofenceViajes(
       resultado.enOrigenVisto !== (estadoLeido?.en_origen_visto ?? false) ||
       resultado.maxDistOrigenM !== (estadoLeido?.max_dist_origen_m ?? 0)
     ) {
-      let query = supabase
-        .from("geofence_viaje_estado")
-        .update({
-          en_origen_visto: resultado.enOrigenVisto,
-          max_dist_origen_m: resultado.maxDistOrigenM,
-        })
-        .eq("viaje_id", viaje.id);
-      if (estadoLeido) {
-        query = query
-          .eq("en_origen_visto", estadoLeido.en_origen_visto)
-          .eq("max_dist_origen_m", estadoLeido.max_dist_origen_m);
-      }
-      const { error } = await query;
-      if (error) {
+      const { data: evidenciaActualizada, error } = await supabase.rpc(
+        "geofence_actualizar_evidencia",
+        {
+          p_viaje_id: viaje.id,
+          p_en_origen_visto: resultado.enOrigenVisto,
+          p_max_dist_origen_m: resultado.maxDistOrigenM,
+        },
+      );
+      if (error || evidenciaActualizada !== true) {
         eventos.push({
           viajeId: viaje.id,
           estadoAnterior: viaje.estado,
@@ -377,7 +394,7 @@ export async function procesarGeofenceViajes(
           inferidas: [],
           distanciaOrigenM: resultado.distanciaOrigenPuntoM,
           distanciaDestinoM: resultado.distanciaDestinoPuntoM,
-          error: error.message,
+          error: error?.message ?? "No se encontró el estado de geocerca para guardar evidencia",
         });
         continue;
       }
@@ -385,39 +402,41 @@ export async function procesarGeofenceViajes(
     }
 
     if (resultado.objetivo) {
-      const { data: transicionData, error: transicionError } = await supabase.rpc(
-        "actualizar_estado_viaje_automatico",
-        {
-          p_viaje_id: viaje.id,
-          p_estado_nuevo: resultado.objetivo,
-          p_fecha_timestamp: ahora.toISOString(),
-        },
-      );
-      const transicionJson = transicionData as Json | null;
-      const transicion = transicionJson as TransicionRpc | null;
-      const error = errorRpc(transicionJson, transicionError);
-      if (error === "estado_ya_aplicado" || error === "transicion_invalida") {
-        eventos.push({
-          viajeId: viaje.id,
-          estadoAnterior: viaje.estado,
-          accion: "sin_cambio",
-          motivo: error,
-          inferidas: [],
-          distanciaOrigenM: resultado.distanciaOrigenPuntoM,
-          distanciaDestinoM: resultado.distanciaDestinoPuntoM,
-        });
-        continue;
+      const cadena = secuenciaTransiciones(viaje.estado as EstadoActivo, resultado.objetivo);
+      const inferidas: string[] = [];
+      let falloTransicion: string | null = null;
+      for (const estadoNuevo of cadena) {
+        const { data: transicionData, error: transicionError } = await supabase.rpc(
+          "actualizar_estado_viaje_automatico",
+          {
+            p_viaje_id: viaje.id,
+            p_estado_nuevo: estadoNuevo,
+            p_fecha_timestamp: ahora.toISOString(),
+          },
+        );
+        const transicionJson = transicionData as Json | null;
+        const transicion = transicionJson as TransicionRpc | null;
+        const error = errorRpc(transicionJson, transicionError);
+        if (error || !transicion?.ok) {
+          falloTransicion = error ?? transicion?.error ?? "RPC de transición devolvió respuesta inválida";
+          break;
+        }
+        if (estadoNuevo !== resultado.objetivo) inferidas.push(estadoNuevo);
       }
-      if (error || !transicion?.ok) {
+      if (falloTransicion) {
         eventos.push({
           viajeId: viaje.id,
           estadoAnterior: viaje.estado,
-          accion: "error",
-          motivo: resultado.motivo,
-          inferidas: [],
+          accion: falloTransicion === "estado_ya_aplicado" || falloTransicion === "transicion_invalida"
+            ? "sin_cambio"
+            : "error",
+          motivo: falloTransicion,
+          inferidas,
           distanciaOrigenM: resultado.distanciaOrigenPuntoM,
           distanciaDestinoM: resultado.distanciaDestinoPuntoM,
-          error: error ?? transicion?.error ?? "RPC de transición devolvió respuesta inválida",
+          ...(falloTransicion !== "estado_ya_aplicado" && falloTransicion !== "transicion_invalida"
+            ? { error: falloTransicion }
+            : {}),
         });
         continue;
       }
@@ -427,7 +446,7 @@ export async function procesarGeofenceViajes(
         estadoNuevo: resultado.objetivo,
         accion: "cambio_estado",
         motivo: resultado.motivo,
-        inferidas: transicion.inferidas ?? [],
+        inferidas,
         distanciaOrigenM: resultado.distanciaOrigenPuntoM,
         distanciaDestinoM: resultado.distanciaDestinoPuntoM,
       });
