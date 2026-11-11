@@ -1,15 +1,15 @@
 // DestinoAutocomplete.tsx
-// Campo de texto con autocompletado de direcciones en Guatemala
+// Campo de texto con autocompletado de direcciones en Guatemala y El Salvador
 // usando la API de Nominatim (OpenStreetMap). Solo devuelve resultados
-// dentro de Guatemala (countrycodes=gt + filtro por country_code).
+// dentro de Guatemala y El Salvador (countrycodes + filtro por country_code).
 // Soporta teclado (↑ ↓ Enter Escape) y limpieza con botón ✕.
 // Ruta: src/components/shared/DestinoAutocomplete.tsx
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Bounding box de Guatemala para acotar resultados de Nominatim
-const GT_VIEWBOX = "-92.4,17.98,-88.1,13.7";
+// Bounding box conjunto de Guatemala y El Salvador para acotar resultados de Nominatim
+const GT_SV_VIEWBOX = "-92.4,18.5,-87.6,13.0";
 
 // Tipo de resultado de Nominatim
 interface NominatimResult {
@@ -95,9 +95,9 @@ export default function DestinoAutocomplete({
         format: "jsonv2",
         addressdetails: "1",
         limit: "8",
-        countrycodes: "gt",
+        countrycodes: "gt,sv",
         bounded: "1",
-        viewbox: GT_VIEWBOX,
+        viewbox: GT_SV_VIEWBOX,
       });
 
       const res = await fetch(
@@ -112,9 +112,9 @@ export default function DestinoAutocomplete({
 
       const data = (await res.json()) as NominatimResult[];
 
-      // Filtro extra para asegurar que sean resultados de Guatemala
+      // Filtro extra para asegurar que sean resultados de Guatemala o El Salvador
       const filtrados = data.filter(
-        (r) => (r.address?.country_code ?? "").toLowerCase() === "gt",
+        (r) => ["gt", "sv"].includes((r.address?.country_code ?? "").toLowerCase()),
       );
 
       setSugerencias(filtrados);
@@ -142,13 +142,14 @@ export default function DestinoAutocomplete({
 
   // Selecciona una sugerencia de la lista.
   // Guarda el display_name completo (dirección exacta con zona, ciudad, etc.).
-  // En el input muestra la dirección sin el último token ", Guatemala"
-  // (siempre son resultados de Guatemala → es redundante visualmente).
+  // En el input muestra la dirección sin el último token del país
+  // (siempre son resultados de Guatemala o El Salvador → es redundante visualmente).
   function seleccionar(item: NominatimResult) {
     const completo = item.display_name;
     const partes = completo.split(", ");
+    const pais = partes[partes.length - 1].trim();
     const sinPais =
-      partes[partes.length - 1].trim() === "Guatemala"
+      ["Guatemala", "El Salvador"].includes(pais)
         ? partes.slice(0, -1).join(", ")
         : completo;
 
