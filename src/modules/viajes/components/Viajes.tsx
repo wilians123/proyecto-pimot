@@ -2025,13 +2025,35 @@ export default function Viajes() {
                         </div>
                       </Field>
 
-                      <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 md:col-span-1 xl:col-span-2">
-                        <span className="text-2xl">💰</span>
-                        <div>
-                          <p className="text-xs font-semibold text-amber-700">
+                      <div className="flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50/80 px-4 py-3 xl:col-span-2">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 64 64"
+                            fill="none"
+                            className="h-8 w-8 text-amber-700"
+                          >
+                            <path
+                              d="M13 20.5 39 7l8 7M13 20.5l29-9a4 4 0 0 1 5 3.8v5.2M13 20.5h36a5 5 0 0 1 5 5v24a5 5 0 0 1-5 5H13a5 5 0 0 1-5-5v-24a5 5 0 0 1 5-5Z"
+                              stroke="currentColor"
+                              strokeWidth="3.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M54 30H43a7 7 0 0 0 0 14h11V30Z"
+                              stroke="currentColor"
+                              strokeWidth="3.5"
+                              strokeLinejoin="round"
+                            />
+                            <circle cx="43" cy="37" r="1.8" fill="currentColor" />
+                          </svg>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
                             Viático a registrar en este viaje
                           </p>
-                          <p className="text-2xl font-black text-amber-800 tabular-nums">
+                          <p className="mt-1 text-2xl font-black leading-none text-amber-800 tabular-nums">
                             Q
                             {parseFloat(fViatico || "0").toLocaleString(
                               "es-GT",
@@ -2040,11 +2062,12 @@ export default function Viajes() {
                               },
                             )}
                           </p>
-                          {pilotoSelec && (
-                            <p className="text-xs text-amber-600 mt-0.5">
-                              Para: {pilotoSelec.nombre}
-                            </p>
-                          )}
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs text-slate-600">Para:</span>
+                            <span className="max-w-full truncate rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-800">
+                              {pilotoSelec?.nombre ?? "Selecciona un piloto"}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
